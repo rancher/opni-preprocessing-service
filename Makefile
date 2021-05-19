@@ -19,6 +19,7 @@ endif
 
 .PHONY: image-build
 image-build:
+	git submodule update --init
 	docker build \
 		--pull \
 		--build-arg PKG=$(PKG) \
