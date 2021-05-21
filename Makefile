@@ -4,17 +4,12 @@ ifeq ($(ARCH),)
 ARCH=$(shell go env GOARCH)
 endif
 
-BUILD_META=-build$(shell date +%Y%m%d)
 ORG ?= rancher
-TAG ?= v0$(BUILD_META)
+TAG ?= v0
 REPO=opni-preprocessing-service
 
 ifneq ($(DRONE_TAG),)
 TAG := $(DRONE_TAG)
-endif
-
-ifeq (,$(filter %$(BUILD_META),$(TAG)))
-$(error TAG needs to end with build metadata: $(BUILD_META))
 endif
 
 .PHONY: image-build
