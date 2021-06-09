@@ -10,7 +10,7 @@ from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import BulkIndexError, async_streaming_bulk
 from masker import LogMasker
-from nats_wrapper import NatsWrapper
+from opni_nats import NatsWrapper
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
 
