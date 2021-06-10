@@ -144,7 +144,7 @@ async def mask_logs(queue):
             ):
                 action, result = result.popitem()
                 if not ok:
-                    logging.error("failed to %s document %s" % ())
+                    logging.error("failed to {} document {}".format())
         except (BulkIndexError, ConnectionTimeout) as exception:
             logging.error("Failed to index data")
             logging.error(exception)
