@@ -150,19 +150,6 @@ async def mask_logs(queue):
             logging.error(exception)
 
 
-async def es_log_management():
-
-    query = {"query": {"range": {"timestamp": {"lte": "now-3d"}}}}
-    while True:
-        try:
-            await es.delete_by_query(index="logs", body=query)
-            logging.info("deleted logs older than 3 days!")
-        except Exception as e:
-            logging.error(e)
-
-        await asyncio.sleep(3600)  # deletion once an hour
-
-
 async def init_nats():
     logging.info("Attempting to connect to NATS")
     await nw.connect()
@@ -173,14 +160,13 @@ if __name__ == "__main__":
     mask_logs_queue = asyncio.Queue(loop=loop)
     nats_consumer_coroutine = consume_logs(mask_logs_queue)
     mask_logs_coroutine = mask_logs(mask_logs_queue)
-    es_management_coroutine = es_log_management()
 
     task = loop.create_task(init_nats())
     loop.run_until_complete(task)
 
     loop.run_until_complete(
         asyncio.gather(
-            nats_consumer_coroutine, mask_logs_coroutine, es_management_coroutine
+            nats_consumer_coroutine, mask_logs_coroutine
         )
     )
     try:
