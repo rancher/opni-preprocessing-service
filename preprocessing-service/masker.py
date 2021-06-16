@@ -40,7 +40,7 @@ class RegexMasker:
             content = mi.regex.sub(mi.mask_with_wrapped, content)
 
         content = " ".join(re.split(r"([=|:])", content))
-        content = " ".join(re.split(r'[\n\r\t\r]', content))
+        content = " ".join(re.split(r"[\n\r\t\r]", content))
 
         for mi in self.masking_instructions:
             # content = re.sub(mi.regex, mi.mask_with_wrapped, content)
@@ -106,8 +106,8 @@ masking_list_before_value_assigning_token_split = [
     },
     {
         "regex_pattern": "(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+(\\d{1,2}) (2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])",
-        "mask_with": "CUSTOM_DATE"
-    }
+        "mask_with": "CUSTOM_DATE",
+    },
 ]
 
 
