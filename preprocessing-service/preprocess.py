@@ -70,10 +70,10 @@ async def mask_logs(queue):
         ):
             payload_data_df["log"] = payload_data_df["message"]
         # TODO Retrain controlplane model to support k3s
-        #elif (
+        # elif (
         #    "log" not in payload_data_df.columns
         #    and "MESSAGE" in payload_data_df.columns
-        #):
+        # ):
         #    payload_data_df["log"] = payload_data_df["MESSAGE"]
         if (
             "log" not in payload_data_df.columns
@@ -119,6 +119,7 @@ async def mask_logs(queue):
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
         payload_data_df["is_control_plane_log"] = False
         payload_data_df["kubernetes_component"] = ""
+        # rke1
         if "filename" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = payload_data_df[
                 "filename"
@@ -132,12 +133,18 @@ async def mask_logs(queue):
                 payload_data_df["kubernetes_component"].str.split("_").str[0]
             )
         # TODO Retrain controlplane nulog to support k3s logs
-        #elif "COMM" in payload_data_df.columns:
+        # k3s
+        # elif "COMM" in payload_data_df.columns:
         #    payload_data_df["is_control_plane_log"] = payload_data_df["COMM"] == "k3s-server"
         #    payload_data_df["kubernetes_component"] = payload_data_df["COMM"]
+        # rke2
         elif "kubernetes.labels.tier" in payload_data_df.columns:
-            payload_data_df["is_control_plane_log"] = payload_data_df["kubernetes.labels.tier"] == "control-plane"
-            payload_data_df["kubernetes_component"] = payload_data_df["kubernetes.labels.component"]
+            payload_data_df["is_control_plane_log"] = (
+                payload_data_df["kubernetes.labels.tier"] == "control-plane"
+            )
+            payload_data_df["kubernetes_component"] = payload_data_df[
+                "kubernetes.labels.component"
+            ]
         is_control_log = payload_data_df["is_control_plane_log"] == True
         control_plane_logs_df = payload_data_df[is_control_log]
         app_logs_df = payload_data_df[~is_control_log]
