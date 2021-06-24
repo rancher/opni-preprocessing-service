@@ -2,9 +2,9 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
 
 # Third Party
+import numpy as np
 import pandas as pd
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import ConnectionTimeout
@@ -90,30 +90,10 @@ async def mask_logs(queue):
         payload_data_df["time_operation"] = pd.to_datetime(
             payload_data_df["time"], errors="coerce", utc=True
         )
-        for index, i in payload_data_df.loc[
-            payload_data_df["time_operation"].isna()
-        ].iterrows():
-            payload_data_df.loc[index, "time_operation"] = datetime.utcfromtimestamp(
-                int(i["time"]) / 1000.0
-            )
-        payload_data_df["time"] = payload_data_df["time_operation"]
-        payload_data_df.drop(columns=["time_operation"], inplace=True)
-        if "timestamp" in payload_data_df.columns:
-            payload_data_df.loc[
-                (payload_data_df.timestamp.dt.year == 1970), "timestamp"
-            ] = pd.NaT
-            payload_data_df["timestamp"].fillna(
-                pd.to_datetime(
-                    payload_data_df.time, unit="ms", errors="ignore", utc=True
-                ),
-                inplace=True,
-            )
-            payload_data_df["timestamp"].fillna(pd.to_datetime("now", utc=True))
-            payload_data_df["timestamp"] = pd.to_datetime(
-                payload_data_df["timestamp"], utc=True
-            )
-        else:
-            payload_data_df["timestamp"] = payload_data_df["time"]
+        payload_data_df["timestamp"] = (
+            payload_data_df["time_operation"].astype(np.int64) // 10 ** 6
+        )
+        payload_data_df.drop(columns=["time_operation", "time"], inplace=True)
 
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
@@ -185,9 +165,7 @@ if __name__ == "__main__":
     loop.run_until_complete(task)
 
     loop.run_until_complete(
-        asyncio.gather(
-            nats_consumer_coroutine, mask_logs_coroutine
-        )
+        asyncio.gather(nats_consumer_coroutine, mask_logs_coroutine)
     )
     try:
         loop.run_forever()
