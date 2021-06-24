@@ -70,11 +70,11 @@ async def mask_logs(queue):
         ):
             payload_data_df["log"] = payload_data_df["message"]
         # TODO Retrain controlplane model to support k3s
-        # elif (
-        #    "log" not in payload_data_df.columns
-        #    and "MESSAGE" in payload_data_df.columns
-        # ):
-        #    payload_data_df["log"] = payload_data_df["MESSAGE"]
+        elif (
+           "log" not in payload_data_df.columns
+           and "MESSAGE" in payload_data_df.columns
+        ):
+           payload_data_df["log"] = payload_data_df["MESSAGE"]
         if (
             "log" not in payload_data_df.columns
             and "message" not in payload_data_df.columns
@@ -134,9 +134,9 @@ async def mask_logs(queue):
             )
         # TODO Retrain controlplane nulog to support k3s logs
         # k3s
-        # elif "COMM" in payload_data_df.columns:
-        #    payload_data_df["is_control_plane_log"] = payload_data_df["COMM"] == "k3s-server"
-        #    payload_data_df["kubernetes_component"] = payload_data_df["COMM"]
+        elif "COMM" in payload_data_df.columns:
+           payload_data_df["is_control_plane_log"] = payload_data_df["COMM"] == "k3s-server"
+           payload_data_df["kubernetes_component"] = payload_data_df["COMM"]
         # rke2
         elif "kubernetes.labels.tier" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = (
