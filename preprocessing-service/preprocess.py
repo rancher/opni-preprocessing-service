@@ -118,15 +118,15 @@ async def mask_logs(queue):
                 payload_data_df["filename"].str.contains("k3s\.log"),
                 ["is_control_plane_log", "kubernetes_component"]
             ] = [True, "k3s"]
-        # k3s systemd
+        # k3s/rke2 systemd
         elif "COMM" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = payload_data_df["COMM"].str.contains(
-                "k3s-(agent|server)"
+                "(k3s|rke2)-(agent|server)|kubelet"
             )
             payload_data_df["kubernetes_component"] = (
                 payload_data_df["COMM"].str.split("-").str[0]
             )
-        # rke2
+        # rke2/kops/kubeadm static pods
         elif "kubernetes.labels.tier" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = (
                 payload_data_df["kubernetes.labels.tier"] == "control-plane"
