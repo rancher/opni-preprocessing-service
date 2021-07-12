@@ -70,11 +70,18 @@ async def mask_logs(queue):
         ):
             payload_data_df["log"] = payload_data_df["message"]
         # TODO Retrain controlplane model to support k3s
-        elif (
+        if (
            "log" not in payload_data_df.columns
            and "MESSAGE" in payload_data_df.columns
         ):
            payload_data_df["log"] = payload_data_df["MESSAGE"]
+        if (
+            "message" in payload_data_df.columns
+            and "MESSAGE" in payload_data_df.columns
+        ):
+            payload_data_df.loc[
+                payload_data_df["log"] == "", ["log"]
+            ] = payload_data_df["MESSAGE"]
         if (
             "log" not in payload_data_df.columns
             and "message" not in payload_data_df.columns
