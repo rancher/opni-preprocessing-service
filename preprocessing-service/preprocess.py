@@ -17,6 +17,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(messa
 ES_ENDPOINT = os.environ["ES_ENDPOINT"]
 ES_USERNAME = os.environ["ES_USERNAME"]
 ES_PASSWORD = os.environ["ES_PASSWORD"]
+ES_RESERVED_KEYWORDS = {
+    "_id",
+    "_index",
+    "_if_seq_no",
+    "_if_primary_term",
+    "_parent",
+    "_percolate",
+    "_retry_on_conflict",
+    "_routing",
+    "_timestamp",
+    "_type",
+    "_version",
+    "_version_type",
+}
+
 
 es = AsyncElasticsearch(
     [ES_ENDPOINT],
@@ -34,7 +49,6 @@ nw = NatsWrapper()
 
 
 async def doc_generator(df):
-    df["_index"] = "logs"
     df["anomaly_predicted_count"] = 0
     df["nulog_anomaly"] = False
     df["drain_anomaly"] = False
@@ -43,10 +57,12 @@ async def doc_generator(df):
     df["drain_matched_template_support"] = -1.0
     df["anomaly_level"] = "Normal"
     for index, document in df.iterrows():
-        doc_dict = {
-            k: v for k, v in document[pd.notnull(document)].to_dict().items() if v
+        doc_kv = document[pd.notnull(document)].to_dict().items()
+        yield {
+            "_index": "logs",
+            "_id": document["_id"],
+            "_source": {k: v for k, v in doc_kv if v and k not in ES_RESERVED_KEYWORDS},
         }
-        yield doc_dict
 
 
 async def consume_logs(mask_logs_queue):
