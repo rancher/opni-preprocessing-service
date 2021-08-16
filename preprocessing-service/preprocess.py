@@ -17,6 +17,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(messa
 ES_ENDPOINT = os.environ["ES_ENDPOINT"]
 ES_USERNAME = os.environ["ES_USERNAME"]
 ES_PASSWORD = os.environ["ES_PASSWORD"]
+ES_RESERVED_KEYWORDS = {
+    "_id",
+    "_index",
+    "_if_seq_no",
+    "_if_primary_term",
+    "_parent",
+    "_percolate",
+    "_retry_on_conflict",
+    "_routing",
+    "_timestamp",
+    "_type",
+    "_version",
+    "_version_type",
+}
+
 
 es = AsyncElasticsearch(
     [ES_ENDPOINT],
@@ -34,7 +49,6 @@ nw = NatsWrapper()
 
 
 async def doc_generator(df):
-    df["_index"] = "logs"
     df["anomaly_predicted_count"] = 0
     df["nulog_anomaly"] = False
     df["drain_anomaly"] = False
@@ -43,8 +57,12 @@ async def doc_generator(df):
     df["drain_matched_template_support"] = -1.0
     df["anomaly_level"] = "Normal"
     for index, document in df.iterrows():
-        doc_dict = document.to_dict()
-        yield doc_dict
+        doc_kv = document[pd.notnull(document)].to_dict().items()
+        yield {
+            "_index": "logs",
+            "_id": document["_id"],
+            "_source": {k: v for k, v in doc_kv if v and k not in ES_RESERVED_KEYWORDS},
+        }
 
 
 async def consume_logs(mask_logs_queue):
@@ -71,10 +89,10 @@ async def mask_logs(queue):
             payload_data_df["log"] = payload_data_df["message"]
         # TODO Retrain controlplane model to support k3s
         if (
-           "log" not in payload_data_df.columns
-           and "MESSAGE" in payload_data_df.columns
+            "log" not in payload_data_df.columns
+            and "MESSAGE" in payload_data_df.columns
         ):
-           payload_data_df["log"] = payload_data_df["MESSAGE"]
+            payload_data_df["log"] = payload_data_df["MESSAGE"]
         if (
             "message" in payload_data_df.columns
             and "MESSAGE" in payload_data_df.columns
@@ -122,14 +140,14 @@ async def mask_logs(queue):
             )
             # k3s openrc
             payload_data_df.loc[
-                payload_data_df["filename"].str.contains("k3s\.log"),
-                ["is_control_plane_log", "kubernetes_component"]
+                payload_data_df["filename"].str.contains(r"k3s\.log"),
+                ["is_control_plane_log", "kubernetes_component"],
             ] = [True, "k3s"]
         # k3s/rke2 systemd
         elif "COMM" in payload_data_df.columns:
-            payload_data_df["is_control_plane_log"] = payload_data_df["COMM"].str.contains(
-                "(k3s|rke2)-(agent|server)|kubelet"
-            )
+            payload_data_df["is_control_plane_log"] = payload_data_df[
+                "COMM"
+            ].str.contains("(k3s|rke2)-(agent|server)|kubelet")
             payload_data_df["kubernetes_component"] = (
                 payload_data_df["COMM"].str.split("-").str[0]
             )
