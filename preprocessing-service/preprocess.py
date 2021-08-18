@@ -61,7 +61,11 @@ async def doc_generator(df):
         yield {
             "_index": "logs",
             "_id": document["_id"],
-            "_source": {k: v for k, v in doc_kv if v and k not in ES_RESERVED_KEYWORDS},
+            "_source": {
+                k: v
+                for k, v in doc_kv
+                if not (isinstance(v, str) and not v) and k not in ES_RESERVED_KEYWORDS
+            },
         }
 
 
