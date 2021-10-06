@@ -147,6 +147,11 @@ async def mask_logs(queue):
                 payload_data_df["filename"].str.contains(r"k3s\.log"),
                 ["is_control_plane_log", "kubernetes_component"],
             ] = [True, "k3s"]
+            # rke2 kubelet
+            payload_data_df.loc[
+                payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
+                ["is_control_plane_log", "kubernetes_component"],
+            ] = [True, "kubelet"]
         # k3s/rke2 systemd
         elif "COMM" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = payload_data_df[
