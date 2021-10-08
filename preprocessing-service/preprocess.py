@@ -55,6 +55,7 @@ async def doc_generator(df):
     df["nulog_confidence"] = -1.0
     df["drain_matched_template_id"] = -1.0
     df["drain_matched_template_support"] = -1.0
+    df["drain_error_keyword"] = False
     df["anomaly_level"] = "Normal"
     for index, document in df.iterrows():
         doc_kv = document[pd.notnull(document)].to_dict().items()
