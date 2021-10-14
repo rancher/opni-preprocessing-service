@@ -127,8 +127,14 @@ async def mask_logs(queue):
 
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-        payload_data_df["is_control_plane_log"] = False
-        payload_data_df["kubernetes_component"] = ""
+        if "agent" in payload_data_df.columns:
+            payload_data_df.loc[
+                payload_data_df["agent"] != "support",
+                ["is_control_plane_log", "kubernetes_component"],
+            ] = [False, ""]
+        else:
+            payload_data_df["is_control_plane_log"] = False
+            payload_data_df["kubernetes_component"] = ""
         # rke1
         if "filename" in payload_data_df.columns:
             # rke
