@@ -55,7 +55,6 @@ async def doc_generator(df):
     df["nulog_confidence"] = -1.0
     df["drain_matched_template_id"] = -1.0
     df["drain_matched_template_support"] = -1.0
-    df["drain_error_keyword"] = False
     df["anomaly_level"] = "Normal"
     for index, document in df.iterrows():
         doc_kv = document[pd.notnull(document)].to_dict().items()
@@ -127,14 +126,8 @@ async def mask_logs(queue):
 
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-        if "agent" in payload_data_df.columns:
-            payload_data_df.loc[
-                payload_data_df["agent"] != "support",
-                ["is_control_plane_log", "kubernetes_component"],
-            ] = [False, ""]
-        else:
-            payload_data_df["is_control_plane_log"] = False
-            payload_data_df["kubernetes_component"] = ""
+        payload_data_df["is_control_plane_log"] = False
+        payload_data_df["kubernetes_component"] = ""
         # rke1
         if "filename" in payload_data_df.columns:
             # rke
@@ -154,11 +147,6 @@ async def mask_logs(queue):
                 payload_data_df["filename"].str.contains(r"k3s\.log"),
                 ["is_control_plane_log", "kubernetes_component"],
             ] = [True, "k3s"]
-            # rke2 kubelet
-            payload_data_df.loc[
-                payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
-                ["is_control_plane_log", "kubernetes_component"],
-            ] = [True, "kubelet"]
         # k3s/rke2 systemd
         elif "COMM" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = payload_data_df[

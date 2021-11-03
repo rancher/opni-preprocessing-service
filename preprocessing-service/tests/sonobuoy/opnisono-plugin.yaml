@@ -1,0 +1,12 @@
+sonobuoy-config:
+  driver: Job
+  plugin-name: opni-sonobuoy
+  result-format: junit
+spec:
+  image: jamesonmcg/opni-preprocessing-service-sonobuoy
+  imagePullPolicy: Always
+  name: plugin
+  resources: { }
+  volumeMounts:
+    - mountPath: /tmp/results
+      name: results

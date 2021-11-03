@@ -1,0 +1,8 @@
+
+*.pyc
+*.idea/*
+*.idea
+*.vscode/*
+*.vscode
+*.DS_Store
+preprocessing-service/tests/integration/kube.yaml
