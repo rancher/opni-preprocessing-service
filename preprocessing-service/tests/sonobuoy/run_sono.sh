@@ -15,5 +15,6 @@ trap saveResults EXIT
 
 mkdir "${results_dir}" || true
 
-pytest -v -s /src/preprocessing-service/tests/integration/smoke_tests.py --junit-xml=report.xml
+pwd && ls -al
+pytest -v -s */preprocessing-service/tests/integration/smoke_tests.py --junit-xml=report.xml
 cp  report.xml "${results_dir}/report.xml"
