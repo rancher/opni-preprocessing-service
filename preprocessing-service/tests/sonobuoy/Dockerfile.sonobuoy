@@ -1,15 +1,13 @@
 FROM python:3.7.0
 
-ENV WORKSPACE /src/
+ENV WORKSPACE /src
 WORKDIR $WORKSPACE
-ENV PYTHONPATH /src/preprocessing-service
-ARG SONOBUOY_VERSION=0.18.2
 
 COPY [".", "$WORKSPACE"]
 
-RUN cd $WORKSPACE && \
+RUN cd $WORKSPACE && ls &&\
     pip install --upgrade pip && \
-    pip install -r requirements-sono.txt && \
-    chmod +x run_sono.sh
+    pip install -r ./preprocessing-service/tests/integration/requirements.txt && \
+    chmod +x ./preprocessing-service/tests/integration/run_sono.sh
 
-ENTRYPOINT ["./run_sono.sh"]
+ENTRYPOINT ["./preprocessing-service/tests/integration/run_sono.sh"]
