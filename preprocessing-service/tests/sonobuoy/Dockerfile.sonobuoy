@@ -2,6 +2,8 @@ FROM python:3.7.0
 
 ENV WORKSPACE /src
 WORKDIR $WORKSPACE
+ENV NATS_SERVER_URL=nats://cluster-nats-cluster.opni.svc.cluster.local:6222
+ENV NKEY_SEED_FILENAME=var/nats/nats-secrets
 
 COPY [".", "$WORKSPACE"]
 

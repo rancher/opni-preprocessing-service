@@ -3,10 +3,17 @@ sonobuoy-config:
   plugin-name: opni-sonobuoy
   result-format: junit
 spec:
-  image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.4
+  image: jamesonmcg/opni-preprocessing-service-sonobuoy:latest
   imagePullPolicy: Always
   name: plugin
   resources: { }
   volumeMounts:
     - mountPath: /tmp/results
       name: results
+    - mountPath: "/var/nats"
+      name: nats-secrets
+      readOnly: true
+  volumes:
+    - name: nats-secrets
+      secret:
+        secretName: cluster-nats-secrets

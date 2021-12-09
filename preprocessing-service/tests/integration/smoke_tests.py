@@ -11,6 +11,7 @@ from threading import Thread
 import pandas as pd
 from nats.aio.client import Client as NATS
 from opni_nats import NatsWrapper
+from pytest import fixture
 
 nw = NatsWrapper()
 queue = Queue()
