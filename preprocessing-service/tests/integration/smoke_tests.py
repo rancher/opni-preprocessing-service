@@ -403,7 +403,7 @@ async def consume_logs(subject):
 
 async def init_nats():
     print("Attempting to connect to NATS")
-    await nw.connect()
+    await nw.connect(servers=["nats://nats-user:MdFP9DfK@opni-cluster-nats-client.opni-cluster.svc.cluster.local:4222"])
     assert nw.connect().__init__
 
 
