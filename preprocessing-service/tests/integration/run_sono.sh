@@ -14,8 +14,19 @@ saveResults() {
 trap saveResults EXIT
 
 mkdir "${results_dir}" || true
+# echo "Creating NATs Directory"
+# mkdir -p /var/nats
+# touch /var/nats/seed
+# echo "First Listing"
+# ls /var/nats
+# echo "Catting File"
+# echo '-----BEGIN USER NKEY SEED-----' >> /var/nats/seed
+# echo 'SUAHXK3QYQ67HDXAI3HHCZNZLADXKZUF54RNGRZJTQHXCUADCIKMPWHXME' >> /var/nats/seed
+# echo '------END USER NKEY SEED------' >> /var/nats/seed 
 
+# echo "Second Listing"
+# ls /var/nats
+# cat /var/nats/seed
 pwd && ls -al
-date
 pytest -v -s /src/preprocessing-service/tests/integration/smoke_tests.py --junit-xml=report.xml
 cp  report.xml "${results_dir}/report.xml"

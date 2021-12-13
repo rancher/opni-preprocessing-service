@@ -2,15 +2,21 @@ FROM python:3.7.0
 
 ENV WORKSPACE /src
 WORKDIR $WORKSPACE
-ENV NATS_SERVER_URL=nats://opni-cluster-nats-client.opni-cluster.svc.cluster.local:4222
+ENV NATS_SERVER_URL=nats://opni-nats-client.opni.svc.cluster.local:4222
 ENV NATS_USERNAME=nats-user
-ENV NATS_PASSWORD=MdFP9DfK
+ENV NATS_PASSWORD=46FdBscn
+# ENV NKEY_SEED_FILENAME=/var/nats/seed
+
+RUN pip install --upgrade pip
+
+COPY ["/preprocessing-service/tests/integration/requirements.txt", "$WORKSPACE/preprocessing-service/tests/integration/requirements.txt"]
+
+RUN cd $WORKSPACE && \
+    pip install -r preprocessing-service/tests/integration/requirements.txt
 
 COPY [".", "$WORKSPACE"]
 
 RUN cd $WORKSPACE && ls && \
-    pip install --upgrade pip && \
-    pip install -r ./preprocessing-service/tests/integration/requirements.txt && \
     chmod +x ./preprocessing-service/tests/integration/run_sono.sh
 
 ENTRYPOINT ["./preprocessing-service/tests/integration/run_sono.sh"]

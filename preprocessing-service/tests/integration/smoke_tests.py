@@ -55,6 +55,7 @@ def test_pps_happy_path_rke_kubelet():
 
 def test_pps_happy_path_rke_kube_proxy():
     
+    nw = NatsWrapper() 
     # This test is to verify the happy path functionality of the Preprocessing Service (PPS). 
 
     logdata = {"filename":{"0":"/var/lib/rancher/rke/log/kube-proxy_97105a1260a6d6c50094817ee4d87a2893dcc2b71b8d5cc06f921439d80784f6.log"},
@@ -403,7 +404,7 @@ async def consume_logs(subject):
 
 async def init_nats():
     print("Attempting to connect to NATS")
-    await nw.connect(servers=["nats://nats-user:MdFP9DfK@opni-cluster-nats-client.opni-cluster.svc.cluster.local:4222"])
+    await nw.connect()
     assert nw.connect().__init__
 
 
