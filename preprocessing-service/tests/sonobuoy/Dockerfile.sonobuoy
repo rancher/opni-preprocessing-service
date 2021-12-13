@@ -4,8 +4,7 @@ ENV WORKSPACE /src
 WORKDIR $WORKSPACE
 ENV NATS_SERVER_URL=nats://opni-nats-client.opni.svc.cluster.local:4222
 ENV NATS_USERNAME=nats-user
-ENV NATS_PASSWORD=46FdBscn
-# ENV NKEY_SEED_FILENAME=/var/nats/seed
+ENV NATS_PASSWORD=
 
 RUN pip install --upgrade pip
 

@@ -4,14 +4,12 @@ import json
 import subprocess
 import time
 from queue import Queue
-from subprocess import Popen
 from threading import Thread
 
 # Third Party
 import pandas as pd
 from nats.aio.client import Client as NATS
 from opni_nats import NatsWrapper
-from pytest import fixture
 
 nw = NatsWrapper()
 queue = Queue()
@@ -31,9 +29,6 @@ def test_pps_happy_path_rke_kubelet():
     
     wait_for_seconds(2)
 
-    loop = asyncio.get_event_loop()
-    loop.stop()
-
     if queue.empty():
         raise Exception("Queue is empty")
     else:
@@ -51,11 +46,11 @@ def test_pps_happy_path_rke_kubelet():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kubelet" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke_kube_proxy():
     
-    nw = NatsWrapper() 
     # This test is to verify the happy path functionality of the Preprocessing Service (PPS). 
 
     logdata = {"filename":{"0":"/var/lib/rancher/rke/log/kube-proxy_97105a1260a6d6c50094817ee4d87a2893dcc2b71b8d5cc06f921439d80784f6.log"},
@@ -67,9 +62,6 @@ def test_pps_happy_path_rke_kube_proxy():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -88,6 +80,7 @@ def test_pps_happy_path_rke_kube_proxy():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kube-proxy" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke_etcd():
@@ -103,9 +96,6 @@ def test_pps_happy_path_rke_etcd():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -124,6 +114,7 @@ def test_pps_happy_path_rke_etcd():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "etcd" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke_kube_apiserver():
@@ -139,9 +130,6 @@ def test_pps_happy_path_rke_kube_apiserver():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -160,6 +148,7 @@ def test_pps_happy_path_rke_kube_apiserver():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kube-apiserver" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke_kube_controller_manager():
@@ -175,9 +164,6 @@ def test_pps_happy_path_rke_kube_controller_manager():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -196,6 +182,7 @@ def test_pps_happy_path_rke_kube_controller_manager():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kube-controller-manager" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke_kube_scheduler():
@@ -211,9 +198,6 @@ def test_pps_happy_path_rke_kube_scheduler():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -232,6 +216,7 @@ def test_pps_happy_path_rke_kube_scheduler():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kube-scheduler" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_rke2_kubelet():
@@ -247,9 +232,6 @@ def test_pps_happy_path_rke2_kubelet():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -268,6 +250,7 @@ def test_pps_happy_path_rke2_kubelet():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "kubelet" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_k3s():
@@ -283,9 +266,6 @@ def test_pps_happy_path_k3s():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -304,6 +284,7 @@ def test_pps_happy_path_k3s():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "k3s" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_k3s():
@@ -319,9 +300,6 @@ def test_pps_happy_path_k3s():
     subscribe_and_publish(logdata, "preprocessed_logs_control_plane", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -340,6 +318,7 @@ def test_pps_happy_path_k3s():
         assert "True" in str(pp_cp_payload["is_control_plane_log"])
         assert "k3s" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def test_pps_happy_path_not_control_plane():
@@ -354,9 +333,6 @@ def test_pps_happy_path_not_control_plane():
     subscribe_and_publish(logdata, "preprocessed_logs", "raw_logs")
     
     wait_for_seconds(2)
-
-    loop = asyncio.get_event_loop()
-    loop.stop()
 
     if queue.empty():
         raise Exception("Queue is empty")
@@ -375,12 +351,19 @@ def test_pps_happy_path_not_control_plane():
         assert "False" in str(pp_cp_payload["is_control_plane_log"])
         assert "'0': ''" in str(pp_cp_payload["kubernetes_component"])
         print("PP_cp_payload: ", pp_cp_payload)
+        empty_queue(queue)
 
 
 def wait_for_seconds(seconds):
     start_time = time.time()
     while time.time() - start_time < seconds:
         continue
+
+
+def empty_queue(q: asyncio.Queue):
+    for _ in range(q.qsize()):
+        q.get_nowait()
+        q.task_done()
 
 
 async def consume_logs(subject):

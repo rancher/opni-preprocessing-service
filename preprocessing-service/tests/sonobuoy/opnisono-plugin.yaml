@@ -3,26 +3,10 @@ sonobuoy-config:
   plugin-name: opni-sonobuoy
   result-format: junit
 spec:
-  image: jamesonmcg/opni-preprocessing-service-sonobuoy:latest
+  image: 
   imagePullPolicy: Always
   name: plugin
-  env:
-    - name: NATS_ENDPOINT
-      value: nats://nats-user:46FdBscn@opni-nats-client.opni.svc.cluster.local:4222
-    # - name: NATS_USERNAME
-    #   value: nats-user
-    # - name: NATS_PASSWORD
-    #   value: 46FdBscn
-    # - name: NKEY_SEED_FILENAME
-    #   value: /var/nats/seed
   resources: { }
   volumeMounts:
     - mountPath: /tmp/results
       name: results
-  #   - mountPath: /var/nats
-  #     name: nats-secrets
-  #     readOnly: true
-  # volumes:
-  #   - name: nats-secrets
-  #     secret:
-  #       secretName: cluster-nats-client
