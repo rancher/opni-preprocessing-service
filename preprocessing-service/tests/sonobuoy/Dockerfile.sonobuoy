@@ -2,7 +2,7 @@ FROM python:3.7.0
 
 ENV WORKSPACE /src
 WORKDIR $WORKSPACE
-ENV NATS_SERVER_URL=nats://opni-nats-client.opni.svc.cluster.local:4222
+ENV NATS_SERVER_URL=nats://cluster-nats-client.opni.svc.cluster.local:4222
 ENV NATS_USERNAME=nats-user
 ENV NATS_PASSWORD=
 
