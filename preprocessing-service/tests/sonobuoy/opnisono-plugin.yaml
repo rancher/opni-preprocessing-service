@@ -10,3 +10,10 @@ spec:
   volumeMounts:
     - mountPath: /tmp/results
       name: results
+    - mountPath: /var/nats
+      name: nats-secrets
+      readOnly: true
+  volumes:
+    - name: nats-secrets
+      secret:
+        secretName: cluster-nats-client
