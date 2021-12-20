@@ -1,53 +1,70 @@
-podSpec:
-  containers: []
-  restartPolicy: Never
-  serviceAccountName: sonobuoy-serviceaccount
-  tolerations:
-  - effect: NoSchedule
-    key: node-role.kubernetes.io/master
-    operator: Exists
-  - key: CriticalAddonsOnly
-    operator: Exists
-  - key: kubernetes.io/e2e-evict-taint-key
-    operator: Exists
-sonobuoy-config:
-  driver: Job
-  plugin-name: opni-sono
-  result-format: raw
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
 spec:
-  command:
-  - ./run.sh
-  image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
-  name: plugin
-  resources: {}
-  volumeMounts:
-  - mountPath: /tmp/results
-    name: results
-  - mountPath: /var/nats
-    name: nats-secrets
-    readOnly: true
-volumes:
+  containers:
+  - image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
+    name: test-container
+    volumeMounts:
+    - mountPath: /var/nats
+      name: nats-secrets
+      readOnly: true
+  volumes:
   - name: nats-secrets
     secret:
       secretName: cluster-nats-client
-
+---
+sonobuoy-config:
+  driver: Job
+  plugin-name: opni-sonobuoy
+  result-format: junit
+spec:
+  containers:
+  - image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
+    imagePullPolicy: Always
+    name: plugin
+    resources: { }
+    volumeMounts:
+    - mountPath: /tmp/results
+      name: results
+  #   - mountPath: /var/nats
+  #     name: nats-secrets
+  #     readOnly: true
+  # volumes:
+  #   - name: nats-secrets
+  #     secret:
+  #       secretName: cluster-nats-client
+  # podSpec:
+#   containers: []
+#   restartPolicy: Never
+#   serviceAccountName: sonobuoy-serviceaccount
+#   tolerations:
+#   - effect: NoSchedule
+#     key: node-role.kubernetes.io/master
+#     operator: Exists
+#   - key: CriticalAddonsOnly
+#     operator: Exists
+#   - key: kubernetes.io/e2e-evict-taint-key
+#     operator: Exists
 # sonobuoy-config:
 #   driver: Job
-#   plugin-name: opni-sonobuoy
-#   result-format: junit
+#   plugin-name: opni-sono
+#   result-format: raw
 # spec:
-#   containers:
-#     image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
-#     imagePullPolicy: Always
-#     name: plugin
-#     resources: { }
-#     volumeMounts:
-#       - mountPath: /tmp/results
-#         name: results
-#       - mountPath: /var/nats
-#         name: nats-secrets
-#         readOnly: true
-#   volumes:
-#     - name: nats-secrets
-#       secret:
-#         secretName: cluster-nats-client
+#   command:
+#   - ./run.sh
+#   image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
+#   name: plugin
+#   resources: {}
+#   volumeMounts:
+#   - mountPath: /tmp/results
+#     name: results
+#   - mountPath: /var/nats
+#     name: nats-secrets
+#     readOnly: true
+# volumes:
+# - name: nats-secrets
+#   secret:
+#     secretName: cluster-nats-client
