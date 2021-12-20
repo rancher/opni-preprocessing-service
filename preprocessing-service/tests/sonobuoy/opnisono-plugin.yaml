@@ -4,20 +4,21 @@ sonobuoy-config:
   result-format: junit
 spec:
   containers:
-    image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
-    imagePullPolicy: Always
-    name: plugin
-    resources: { }
-    volumeMounts:
-      - mountPath: /tmp/results
-        name: results
-      - mountPath: /var/nats
-        name: nats-secrets
-        readOnly: true
+    - image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
+      imagePullPolicy: Always
+      name: plugin
+      resources: { }
+      volumeMounts:
+        - mountPath: /tmp/results
+          name: results
+        - mountPath: "/var/nats"
+          name: nats-secrets
+          readOnly: true
   volumes:
     - name: nats-secrets
       secret:
         secretName: cluster-nats-client
+
 # podSpec:
 #   containers: []
 #   restartPolicy: Never
@@ -34,19 +35,19 @@ spec:
 #   driver: Job
 #   plugin-name: opni-sono
 #   result-format: raw
-# spec:
-#   command:
-#     - ./run.sh
-#   image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
-#   name: plugin
-#   resources: {}
-#   volumeMounts:
-#     - mountPath: /tmp/results
-#       name: results
-#     - mountPath: /var/nats
-#       name: nats-secrets
-#       readOnly: true
-#   volumes:
-#     - name: nats-secrets
-#       secret:
-#         secretName: cluster-nats-client
+#   spec:
+#     command:
+#       - ./run.sh
+#     image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
+#     name: plugin
+#     resources: {}
+#     volumeMounts:
+#       - mountPath: /tmp/results
+#         name: results
+#       - mountPath: /var/nats
+#         name: nats-secrets
+#         readOnly: true
+#     volumes:
+#       - name: nats-secrets
+#         secret:
+#           secretName: cluster-nats-client
