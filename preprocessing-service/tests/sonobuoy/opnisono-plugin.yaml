@@ -3,7 +3,7 @@ sonobuoy-config:
   plugin-name: opni-sonobuoy
   result-format: junit
 spec:
-  image: jamesonmcg/opni-payload-receiver-service-sonobuoy:v0.1.0
+  image: jamesonmcg/opni-preprocessing-service-sonobuoy:v0.1.0
   imagePullPolicy: Always
   name: plugin
   resources: { }
