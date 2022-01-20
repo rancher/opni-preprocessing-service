@@ -60,6 +60,10 @@ class RegexMasker:
 
 masking_list = [
     {
+        "regex_pattern": "[^\\s]+.go : [0-9]+",
+        "mask_with": "GO_FILE_PATH"
+    },
+    {
         "regex_pattern": "[a-z0-9]+[\\._]?[a-z0-9]+[@]\\w+[.]\\w{2,3}",
         "mask_with": "EMAIL_ADDRESS",
     },
