@@ -28,12 +28,23 @@ class RegexMasker:
         self.remove_delimiters = r'([| \(|\)|\[|\]\'|\{|\}|"|,])'
         self.ansi_escape = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]")
 
-    def mask(self, content: str):
+    def mask(self, content: str, is_control_plane_log: bool):
 
         # get rid of escape keys
         content = self.ansi_escape.sub("", content)
 
-        # reduce any json objects (TODO)
+        # If log is a control plane log, mask out content from structured control plane log messages which follow the 'a="somecontent" to be a=<a>'
+        if is_control_plane_log:
+            assignment_regex = '([A-z]+)="(.*?)"'
+            matching_indices = [(m.start(0), m.end(0)) for m in re.finditer(assignment_regex, content)]
+            modified_content = content[:]
+
+            for m in matching_indices:
+                substring = content[m[0]:m[1]]
+                left_side_term = substring.split("=\"")[0]
+                if left_side_term != "err":
+                    modified_content = modified_content.replace(substring, "{}=<{}>".format(left_side_term, left_side_term))
+            content = modified_content[:]
 
         for mi in self.masking_instructions_before_value_assign_token_split:
             # content = re.sub(mi.regex, mi.mask_with_wrapped, content)
@@ -132,5 +143,5 @@ class LogMasker:
             masking_instructions_before_value_assigning_token_split,
         )
 
-    def mask(self, content: str):
-        return self.masker.mask(content)
+    def mask(self, content: str, is_control_plane_log: bool):
+        return self.masker.mask(content, is_control_plane_log)
