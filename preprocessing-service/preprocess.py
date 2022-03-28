@@ -47,28 +47,28 @@ es = AsyncElasticsearch(
 
 nw = NatsWrapper()
 
-
 async def doc_generator(df):
-    df["anomaly_predicted_count"] = 0
-    df["nulog_anomaly"] = False
-    df["drain_anomaly"] = False
-    df["drain_control_plane_template_matched"] = ""
-    df["nulog_confidence"] = -1.0
-    df["drain_matched_template_id"] = -1.0
-    df["drain_matched_template_support"] = -1.0
-    df["drain_error_keyword"] = False
-    df["anomaly_level"] = "Normal"
+    df["_op_type"] = "update"
+    df["_index"] = "logs"
+    doc_keywords = set(["_op_type", "_index", "_id", "doc"])
     for index, document in df.iterrows():
-        doc_kv = document[pd.notnull(document)].to_dict().items()
-        yield {
-            "_index": "logs",
-            "_id": document["_id"],
-            "_source": {
-                k: v
-                for k, v in doc_kv
-                if not (isinstance(v, str) and not v) and k not in ES_RESERVED_KEYWORDS
-            },
-        }
+        doc_dict = document[pd.notnull(document)].to_dict()
+        doc_dict["doc"] = {}
+        doc_dict_keys = list(doc_dict.keys())
+        for k in doc_dict_keys:
+            if not k in doc_keywords:
+                doc_dict["doc"][k] = doc_dict[k]
+                del doc_dict[k]
+        doc_dict["doc"]["anomaly_predicted_count"] = 0
+        doc_dict["doc"]["nulog_anomaly"] = False
+        doc_dict["doc"]["drain_anomaly"] = False
+        doc_dict["doc"]["drain_control_plane_template_matched"] = ""
+        doc_dict["doc"]["nulog_confidence"] = -1.0
+        doc_dict["doc"]["drain_matched_template_id"] = -1.0
+        doc_dict["doc"]["drain_matched_template_support"] = -1.0
+        doc_dict["doc"]["drain_error_keyword"] = False
+        doc_dict["doc"]["anomaly_level"] = "Normal"
+        yield doc_dict
 
 
 async def consume_logs(mask_logs_queue):
@@ -135,15 +135,21 @@ async def mask_logs(queue):
             payload_data_df["kubernetes_component"] = ""
         # rke1
         if "filename" in payload_data_df.columns:
-            # rke
+            payload_data_df["filename"] = payload_data_df["filename"].fillna("")
             payload_data_df["is_control_plane_log"] = payload_data_df[
                 "filename"
             ].str.contains(
                 "rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler"
             )
-            payload_data_df["kubernetes_component"] = payload_data_df["filename"].apply(
+            payload_data_df["is_control_plane_log"] = payload_data_df[
+                "filename"
+            ].str.contains(
+                "rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler"
+            )
+            payload_data_df["kubernetes_component"]= payload_data_df["filename"].apply(
                 lambda x: os.path.basename(x)
             )
+
             payload_data_df["kubernetes_component"] = (
                 payload_data_df["kubernetes_component"].str.split("_").str[0]
             )
@@ -159,6 +165,7 @@ async def mask_logs(queue):
             ] = [True, "kubelet"]
         # k3s/rke2 systemd
         elif "COMM" in payload_data_df.columns:
+            payload_data_df["COMM"] = payload_data_df["COMM"].fillna("")
             payload_data_df["is_control_plane_log"] = payload_data_df[
                 "COMM"
             ].str.contains("(k3s|rke2)-(agent|server)|kubelet")
@@ -167,6 +174,7 @@ async def mask_logs(queue):
             )
         # rke2/kops/kubeadm static pods
         elif "kubernetes.labels.tier" in payload_data_df.columns:
+            payload_data_df["kubernetes.labels.tier"] = payload_data_df["kubernetes.labels.tier"].fillna("")
             payload_data_df["is_control_plane_log"] = (
                 payload_data_df["kubernetes.labels.tier"] == "control-plane"
             )
@@ -177,6 +185,16 @@ async def mask_logs(queue):
         for index, row in payload_data_df.iterrows():
             masked_logs.append(masker.mask(row["log"], row["is_control_plane_log"]))
         payload_data_df["masked_log"] = masked_logs
+        try:
+            async for ok, result in async_streaming_bulk(
+                es, doc_generator(payload_data_df)
+            ):
+                action, result = result.popitem()
+                if not ok:
+                    logging.error("failed to {} document {}".format())
+        except (BulkIndexError, ConnectionTimeout) as exception:
+            logging.error("Failed to index data")
+            logging.error(exception)
         is_control_log = payload_data_df["is_control_plane_log"] == True
         control_plane_logs_df = payload_data_df[is_control_log]
         app_logs_df = payload_data_df[~is_control_log]
@@ -191,17 +209,6 @@ async def mask_logs(queue):
                 control_plane_logs_df.to_json().encode(),
             )
             logging.info("Publishing {} control plane logs".format(len(control_plane_logs_df)))
-
-        try:
-            async for ok, result in async_streaming_bulk(
-                es, doc_generator(payload_data_df)
-            ):
-                action, result = result.popitem()
-                if not ok:
-                    logging.error("failed to {} document {}".format())
-        except (BulkIndexError, ConnectionTimeout) as exception:
-            logging.error("Failed to index data")
-            logging.error(exception)
 
 
 async def init_nats():
