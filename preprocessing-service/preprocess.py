@@ -154,10 +154,11 @@ async def mask_logs(queue):
             logging.error(exception)
         is_control_log = payload_data_df["is_control_plane_log"] == True
         control_plane_logs_df = payload_data_df[is_control_log]
+        '''
         app_logs_df = payload_data_df[~is_control_log]
-
         if len(app_logs_df) > 0:
             await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
+        '''
 
         if len(control_plane_logs_df) > 0:
             await nw.publish(
