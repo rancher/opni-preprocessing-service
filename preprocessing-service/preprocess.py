@@ -70,7 +70,6 @@ async def mask_logs(queue):
     masker = LogMasker()
     while True:
         payload_data_df = await queue.get()
-        logging.info("Received payload of length {}".format(len(payload_data_df)))
         if (
             "log" not in payload_data_df.columns
             and "message" in payload_data_df.columns
@@ -93,7 +92,6 @@ async def mask_logs(queue):
             "log" not in payload_data_df.columns
             and "message" not in payload_data_df.columns
         ):
-            logging.warning("ERROR: No log or message field")
             continue
         payload_data_df["log"] = payload_data_df["log"].str.strip()
         # impute NaT with time column if available else use current time
@@ -152,17 +150,13 @@ async def mask_logs(queue):
                 es, doc_generator(payload_data_df)
             ):
                 action, result = result.popitem()
-                if not ok:
-                    logging.error("failed to {} document {}".format())
         except (BulkIndexError, ConnectionTimeout) as exception:
-            logging.error("Failed to index data")
             logging.error(exception)
         is_control_log = payload_data_df["is_control_plane_log"] == True
         control_plane_logs_df = payload_data_df[is_control_log]
         app_logs_df = payload_data_df[~is_control_log]
 
         if len(app_logs_df) > 0:
-            logging.info("Publishing {} workload logs".format(len(app_logs_df)))
             await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
 
         if len(control_plane_logs_df) > 0:
@@ -170,8 +164,6 @@ async def mask_logs(queue):
                 "preprocessed_logs_control_plane",
                 control_plane_logs_df.to_json().encode(),
             )
-            logging.info("Publishing {} control plane logs".format(len(control_plane_logs_df)))
-
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
