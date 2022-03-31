@@ -75,6 +75,10 @@ masking_list = [
         "mask_with": "GO_FILE_PATH"
     },
     {
+        "regex_pattern": "[a-z0-9]+[\\._]?[a-z0-9]+[@]\\w+[.]\\w{2,3}",
+        "mask_with": "EMAIL_ADDRESS"
+    },
+    {
         "regex_pattern": "((?<=[^A-Za-z0-9])|^)(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\/\\d{1,3})((?=[^A-Za-z0-9])|$)",
         "mask_with": "IP",
     },
@@ -101,7 +105,6 @@ masking_list = [
     {"regex_pattern": "{[\\s]*}", "mask_with": "EMPTY_SET"},
     {"regex_pattern": "\\[[\\s]*\\]", "mask_with": "EMPTY_LIST"},
 ]
-# email_address_pattern = {"regex_pattern": "[a-z0-9]+[\\._]?[a-z0-9]+[@]\\w+[.]\\w{2,3}","mask_with": "EMAIL_ADDRESS"}
 
 masking_list_before_value_assigning_token_split = [
     {
