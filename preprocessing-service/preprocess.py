@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+from io import StringIO
 
 # Third Party
 import numpy as np
@@ -56,7 +57,7 @@ async def doc_generator(df):
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
         payload_data = msg.data.decode()
-        await mask_logs_queue.put(pd.read_json(payload_data, dtype={"_id": object}))
+        await mask_logs_queue.put(pd.read_json(StringIO(payload_data), dtype={"_id": object, "cluster_id": str}))
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -106,6 +107,7 @@ async def mask_logs(queue):
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
         if "agent" in payload_data_df.columns:
+            payload_data_df["is_control_plane_log"] = payload_data_df["is_control_plane_log"].map({"true": True, "false": False})
             payload_data_df.loc[
                 payload_data_df["agent"] != "support",
                 ["is_control_plane_log", "kubernetes_component"],
