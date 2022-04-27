@@ -143,7 +143,7 @@ async def mask_logs(queue):
 
         masked_logs = []
         for index, row in payload_data_df.iterrows():
-            masked_logs.append(masker.mask(row["log"], row["is_control_plane_log"]))
+            masked_logs.append(masker.mask(row["log"]))
         payload_data_df["masked_log"] = masked_logs
         try:
             async for ok, result in async_streaming_bulk(
