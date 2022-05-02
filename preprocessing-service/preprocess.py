@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import os
+import json
+import time
 
 # Third Party
 import numpy as np
@@ -56,7 +58,9 @@ async def doc_generator(df):
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
         payload_data = msg.data.decode()
-        await mask_logs_queue.put(pd.read_json(payload_data, dtype={"_id": object}))
+        # await mask_logs_queue.put(pd.DataFrame(json.loads(payload_data), index=[0]))
+        # await mask_logs_queue.put(pd.json_normalize(json.loads(payload_data)))
+        await mask_logs_queue.put(json.loads(payload_data))
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -68,103 +72,120 @@ async def consume_logs(mask_logs_queue):
 
 async def mask_logs(queue):
     masker = LogMasker()
+    pending_list = []
+    st = time.time()
     while True:
-        payload_data_df = await queue.get()
-        if (
-            "log" not in payload_data_df.columns
-            and "message" in payload_data_df.columns
-        ):
-            payload_data_df["log"] = payload_data_df["message"]
-        # TODO Retrain controlplane model to support k3s
-        if (
-            "log" not in payload_data_df.columns
-            and "MESSAGE" in payload_data_df.columns
-        ):
-            payload_data_df["log"] = payload_data_df["MESSAGE"]
-        if (
-            "message" in payload_data_df.columns
-            and "MESSAGE" in payload_data_df.columns
-        ):
-            payload_data_df.loc[
-                payload_data_df["log"] == "", ["log"]
-            ] = payload_data_df["MESSAGE"]
-        if (
-            "log" not in payload_data_df.columns
-            and "message" not in payload_data_df.columns
-        ):
-            continue
-        payload_data_df["log"] = payload_data_df["log"].str.strip()
-        # impute NaT with time column if available else use current time
-        payload_data_df["time_operation"] = pd.to_datetime(
-            payload_data_df["time"], errors="coerce", utc=True
-        )
-        payload_data_df["timestamp"] = (
-            payload_data_df["time_operation"].astype(np.int64) // 10 ** 6
-        )
-        payload_data_df.drop(columns=["time_operation", "time"], inplace=True)
+        json_payload = await queue.get()
+        pending_list.append(json_payload)
+        this_time = time.time()
+        if this_time - st >= 1:
+            payload_data_df = pd.json_normalize(pending_list)
+            logging.info(f"processing {len(pending_list)} logs...")
+            pending_list = []
+            # payload_data_df = await queue.get()
+            # if (
+            #     "log" not in payload_data_df.columns
+            #     and "message" in payload_data_df.columns
+            # ):
+            #     payload_data_df["log"] = payload_data_df["message"]
+            # # TODO Retrain controlplane model to support k3s
+            # if (
+            #     "log" not in payload_data_df.columns
+            #     and "MESSAGE" in payload_data_df.columns
+            # ):
+            #     payload_data_df["log"] = payload_data_df["MESSAGE"]
+            # if (
+            #     "message" in payload_data_df.columns
+            #     and "MESSAGE" in payload_data_df.columns
+            # ):
+            #     payload_data_df.loc[
+            #         payload_data_df["log"] == "", ["log"]
+            #     ] = payload_data_df["MESSAGE"]
+            # if (
+            #     "log" not in payload_data_df.columns
+            #     and "message" not in payload_data_df.columns
+            # ):
+            #     continue
+            payload_data_df["log"] = payload_data_df["log"].str.strip()
+            # impute NaT with time column if available else use current time
+            # payload_data_df["time_operation"] = pd.to_datetime(
+            #     payload_data_df["time"], errors="coerce", utc=True
+            # )
+            # payload_data_df["timestamp"] = (
+            #     payload_data_df["time_operation"].astype(np.int64) // 10 ** 6
+            # )
+            # payload_data_df.drop(columns=["time_operation", "time"], inplace=True)
 
-        # drop redundant field in control plane logs
-        payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-        if "agent" in payload_data_df.columns:
-            payload_data_df.loc[
-                payload_data_df["agent"] != "support",
-                ["is_control_plane_log", "kubernetes_component"],
-            ] = [False, ""]
-        else:
-            payload_data_df["is_control_plane_log"] = False
-            payload_data_df["kubernetes_component"] = ""
-        # rke1
-        if "filename" in payload_data_df.columns:
-            rke_filename_filter = payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler")
-            payload_data_df.loc[rke_filename_filter, ["is_control_plane_log"]] = True
-            payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["filename"].apply(lambda x: os.path.basename(x))
-            payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["kubernetes_component"].str.split("_").str[0]
+            # drop redundant field in control plane logs
+            payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
+            
+            
+            if "agent" in payload_data_df.columns:
+                payload_data_df.loc[
+                    payload_data_df["agent"] != "support",
+                    ["is_control_plane_log", "kubernetes_component"],
+                ] = [False, ""]
+            else:
+                payload_data_df["is_control_plane_log"] = False
+                payload_data_df["kubernetes_component"] = ""
+            # rke1
+            if "filename" in payload_data_df.columns:
+                rke_filename_filter = payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler")
+                payload_data_df.loc[rke_filename_filter, ["is_control_plane_log"]] = True
+                payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["filename"].apply(lambda x: os.path.basename(x))
+                payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["kubernetes_component"].str.split("_").str[0]
 
-            # k3s openrc
-            payload_data_df.loc[
-                payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains(r"k3s\.log"),
-                ["is_control_plane_log", "kubernetes_component"],
-            ] = [True, "k3s"]
-            # rke2 kubelet
-            payload_data_df.loc[
-                payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
-                ["is_control_plane_log", "kubernetes_component"],
-            ] = [True, "kubelet"]
-        # k3s/rke2 systemd
-        if "COMM" in payload_data_df.columns:
-            comm_df_filter = payload_data_df["COMM"].notnull() & payload_data_df["COMM"].str.contains("(k3s|rke2)-(agent|server)|kubelet")
-            payload_data_df.loc[comm_df_filter, ["is_control_plane_log"]] = True
-            payload_data_df.loc[comm_df_filter, ["kubernetes_component"]] = payload_data_df[comm_df_filter]["COMM"].str.split("-").str[0]
-        # rke2/kops/kubeadm static pods
-        if "kubernetes.labels.tier" in payload_data_df.columns:
-            kube_labels_tier_filter = payload_data_df["kubernetes.labels.tier"].notnull() & payload_data_df["kubernetes.labels.tier"] == "control-plane"
-            payload_data_df.loc[kube_labels_tier_filter, ["is_control_plane_log"]] = True
-            payload_data_df.loc[kube_labels_tier_filter, ["kubernetes_component"]] = payload_data_df[kube_labels_tier_filter]["kubernetes.labels.component"]
+                # k3s openrc
+                payload_data_df.loc[
+                    payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains(r"k3s\.log"),
+                    ["is_control_plane_log", "kubernetes_component"],
+                ] = [True, "k3s"]
+                # rke2 kubelet
+                payload_data_df.loc[
+                    payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
+                    ["is_control_plane_log", "kubernetes_component"],
+                ] = [True, "kubelet"]
+            # k3s/rke2 systemd
+            if "COMM" in payload_data_df.columns:
+                comm_df_filter = payload_data_df["COMM"].notnull() & payload_data_df["COMM"].str.contains("(k3s|rke2)-(agent|server)|kubelet")
+                payload_data_df.loc[comm_df_filter, ["is_control_plane_log"]] = True
+                payload_data_df.loc[comm_df_filter, ["kubernetes_component"]] = payload_data_df[comm_df_filter]["COMM"].str.split("-").str[0]
+            # rke2/kops/kubeadm static pods
+            if "kubernetes.labels.tier" in payload_data_df.columns:
+                kube_labels_tier_filter = payload_data_df["kubernetes.labels.tier"].notnull() & payload_data_df["kubernetes.labels.tier"] == "control-plane"
+                payload_data_df.loc[kube_labels_tier_filter, ["is_control_plane_log"]] = True
+                payload_data_df.loc[kube_labels_tier_filter, ["kubernetes_component"]] = payload_data_df[kube_labels_tier_filter]["kubernetes.labels.component"]
 
-        masked_logs = []
-        for index, row in payload_data_df.iterrows():
-            masked_logs.append(masker.mask(row["log"]))
-        payload_data_df["masked_log"] = masked_logs
-        try:
-            async for ok, result in async_streaming_bulk(
-                es, doc_generator(payload_data_df)
-            ):
-                action, result = result.popitem()
-        except (BulkIndexError, ConnectionTimeout) as exception:
-            logging.error(exception)
-        is_control_log = payload_data_df["is_control_plane_log"] == True
-        control_plane_logs_df = payload_data_df[is_control_log]
-        '''
-        app_logs_df = payload_data_df[~is_control_log]
-        if len(app_logs_df) > 0:
-            await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
-        '''
+            masked_logs = []
 
-        if len(control_plane_logs_df) > 0:
-            await nw.publish(
-                "preprocessed_logs_control_plane",
-                control_plane_logs_df.to_json().encode(),
-            )
+            for index, row in payload_data_df.iterrows():
+                masked_logs.append(masker.mask(row["log"]))
+            payload_data_df["masked_log"] = masked_logs
+            payload_data_df.drop(["kubernetes"], axis=1, errors="ignore", inplace=True)
+            payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
+            payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
+            payload_data_df.drop(["pod_labels"], axis=1, errors="ignore", inplace=True)
+            try:
+                async for ok, result in async_streaming_bulk(
+                    es, doc_generator(payload_data_df)
+                ):
+                    action, result = result.popitem()
+            except (BulkIndexError, ConnectionTimeout) as exception:
+                logging.error(exception)
+            is_control_log = payload_data_df["is_control_plane_log"] == True
+            control_plane_logs_df = payload_data_df[is_control_log]
+            '''
+            app_logs_df = payload_data_df[~is_control_log]
+            if len(app_logs_df) > 0:
+                await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
+            '''
+
+            if len(control_plane_logs_df) > 0:
+                await nw.publish(
+                    "preprocessed_logs_control_plane",
+                    control_plane_logs_df.to_json().encode(),
+                )
+        st = this_time
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
