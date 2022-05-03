@@ -73,49 +73,17 @@ async def consume_logs(mask_logs_queue):
 async def mask_logs(queue):
     masker = LogMasker()
     pending_list = []
-    st = time.time()
+    last_time = time.time()
     while True:
         json_payload = await queue.get()
         pending_list.append(json_payload)
         this_time = time.time()
-        if this_time - st >= 1:
+        if this_time - last_time >= 1 or len(pending_list) >= 1000: # every seconds or every 1000 docs
             payload_data_df = pd.json_normalize(pending_list)
             logging.info(f"processing {len(pending_list)} logs...")
             pending_list = []
-            # payload_data_df = await queue.get()
-            # if (
-            #     "log" not in payload_data_df.columns
-            #     and "message" in payload_data_df.columns
-            # ):
-            #     payload_data_df["log"] = payload_data_df["message"]
-            # # TODO Retrain controlplane model to support k3s
-            # if (
-            #     "log" not in payload_data_df.columns
-            #     and "MESSAGE" in payload_data_df.columns
-            # ):
-            #     payload_data_df["log"] = payload_data_df["MESSAGE"]
-            # if (
-            #     "message" in payload_data_df.columns
-            #     and "MESSAGE" in payload_data_df.columns
-            # ):
-            #     payload_data_df.loc[
-            #         payload_data_df["log"] == "", ["log"]
-            #     ] = payload_data_df["MESSAGE"]
-            # if (
-            #     "log" not in payload_data_df.columns
-            #     and "message" not in payload_data_df.columns
-            # ):
-            #     continue
+            last_time = this_time
             payload_data_df["log"] = payload_data_df["log"].str.strip()
-            # impute NaT with time column if available else use current time
-            # payload_data_df["time_operation"] = pd.to_datetime(
-            #     payload_data_df["time"], errors="coerce", utc=True
-            # )
-            # payload_data_df["timestamp"] = (
-            #     payload_data_df["time_operation"].astype(np.int64) // 10 ** 6
-            # )
-            # payload_data_df.drop(columns=["time_operation", "time"], inplace=True)
-
             # drop redundant field in control plane logs
             payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
             
@@ -161,10 +129,8 @@ async def mask_logs(queue):
             for index, row in payload_data_df.iterrows():
                 masked_logs.append(masker.mask(row["log"]))
             payload_data_df["masked_log"] = masked_logs
-            payload_data_df.drop(["kubernetes"], axis=1, errors="ignore", inplace=True)
             payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
             payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
-            payload_data_df.drop(["pod_labels"], axis=1, errors="ignore", inplace=True)
             try:
                 async for ok, result in async_streaming_bulk(
                     es, doc_generator(payload_data_df)
@@ -185,7 +151,7 @@ async def mask_logs(queue):
                     "preprocessed_logs_control_plane",
                     control_plane_logs_df.to_json().encode(),
                 )
-        st = this_time
+            
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
