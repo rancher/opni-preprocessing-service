@@ -5,6 +5,7 @@ import os
 import json
 import time
 
+
 # Third Party
 import numpy as np
 import pandas as pd
@@ -47,9 +48,6 @@ async def doc_generator(df):
             if not k in doc_keywords:
                 doc_dict["doc"][k] = doc_dict[k]
                 del doc_dict[k]
-        #Comment out the anomaly_predicted_count and nulog_anomaly values as those will both be used for workload logs.
-        #doc_dict["doc"]["anomaly_predicted_count"] = 0
-        #doc_dict["doc"]["nulog_anomaly"] = False
         doc_dict["doc"]["drain_control_plane_template_matched"] = ""
         doc_dict["doc"]["anomaly_level"] = "Normal"
         yield doc_dict
