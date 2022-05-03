@@ -1,8 +1,8 @@
 # Standard Library
 import asyncio
+import json
 import logging
 import os
-from io import StringIO
 
 # Third Party
 import numpy as np
@@ -46,15 +46,15 @@ async def doc_generator(df):
             if not k in doc_keywords:
                 doc_dict["doc"][k] = doc_dict[k]
                 del doc_dict[k]
-        doc_dict["doc"]["drain_control_plane_template_matched"] = ""
+        doc_dict["doc"]["drain_pretrained_template_matched"] = ""
         doc_dict["doc"]["anomaly_level"] = "Normal"
         yield doc_dict
 
 
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
-        payload_data = msg.data.decode()
-        await mask_logs_queue.put(pd.read_json(StringIO(payload_data), dtype={"_id": object, "cluster_id": str}))
+        payload_data = json.loads(msg.data.decode())
+        await mask_logs_queue.put(pd.json_normalize(payload_data))
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -103,6 +103,11 @@ async def mask_logs(queue):
 
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
+        payload_data_df["is_rancher_log"] = False
+        if "kubernetes.container_image" in payload_data_df.columns:
+            rancher_log_filter = payload_data_df["kubernetes.container_image"].notnull() & payload_data_df["kubernetes.container_image"].str.contains("rancher/rancher")
+            payload_data_df.loc[rancher_log_filter, ["is_rancher_log"]] = True
+
         if "agent" in payload_data_df.columns:
             payload_data_df["is_control_plane_log"] = payload_data_df["is_control_plane_log"].map({"true": True, "false": False})
             payload_data_df.loc[
@@ -151,18 +156,12 @@ async def mask_logs(queue):
                 action, result = result.popitem()
         except (BulkIndexError, ConnectionTimeout) as exception:
             logging.error(exception)
-        is_control_log = payload_data_df["is_control_plane_log"] == True
-        control_plane_logs_df = payload_data_df[is_control_log]
-        '''
-        app_logs_df = payload_data_df[~is_control_log]
-        if len(app_logs_df) > 0:
-            await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
-        '''
+        pretrained_model_logs_df = payload_data_df.loc[(payload_data_df["is_control_plane_log"] == True) | (payload_data_df["is_rancher_log"] == True)]
 
-        if len(control_plane_logs_df) > 0:
+        if len(pretrained_model_logs_df) > 0:
             await nw.publish(
-                "preprocessed_logs_control_plane",
-                control_plane_logs_df.to_json().encode(),
+                "preprocessed_logs_pretrained_model",
+                pretrained_model_logs_df.to_json().encode(),
             )
 
 async def init_nats():
