@@ -48,13 +48,14 @@ async def doc_generator(df):
             if not k in doc_keywords:
                 doc_dict["doc"][k] = doc_dict[k]
                 del doc_dict[k]
-        doc_dict["doc"]["drain_control_plane_template_matched"] = ""
+        doc_dict["doc"]["drain_pretrained_template_matched"] = ""
         doc_dict["doc"]["anomaly_level"] = "Normal"
         yield doc_dict
 
 
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
+
         payload_data = msg.data.decode()
         # await mask_logs_queue.put(pd.DataFrame(json.loads(payload_data), index=[0]))
         # await mask_logs_queue.put(pd.json_normalize(json.loads(payload_data)))
@@ -85,7 +86,11 @@ async def mask_logs(queue):
             payload_data_df["log"] = payload_data_df["log"].str.strip()
             # drop redundant field in control plane logs
             payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-            
+            payload_data_df["is_rancher_log"] = False
+            if "kubernetes.container_image" in payload_data_df.columns and "deployment" in payload_data_df.columns and "service" in payload_data_df.columns:
+                rancher_log_filter = payload_data_df["kubernetes.container_image"].notnull() & payload_data_df[
+                    "kubernetes.container_image"].str.contains("rancher/rancher") & payload_data_df["deployment"].str.fullmatch("rancher") & payload_data_df["service"].str.fullmatch("rancher")
+                payload_data_df.loc[rancher_log_filter, ["is_rancher_log"]] = True
             
             # if "agent" in payload_data_df.columns:
             #     payload_data_df.loc[
@@ -126,7 +131,10 @@ async def mask_logs(queue):
             masked_logs = []
 
             for index, row in payload_data_df.iterrows():
-                masked_logs.append(masker.mask(row["log"]))
+                try:
+                    masked_logs.append(masker.mask(row["log"]))
+                except Exception as e:
+                    masked_logs.append(row["log"])
             payload_data_df["masked_log"] = masked_logs
             payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
             payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
@@ -137,21 +145,14 @@ async def mask_logs(queue):
                     action, result = result.popitem()
             except (BulkIndexError, ConnectionTimeout) as exception:
                 logging.error(exception)
-            is_control_log = payload_data_df["is_control_plane_log"] == True
-            control_plane_logs_df = payload_data_df[is_control_log]
-            '''
-            app_logs_df = payload_data_df[~is_control_log]
-            if len(app_logs_df) > 0:
-                await nw.publish("preprocessed_logs", app_logs_df.to_json().encode())
-            '''
 
-            if len(control_plane_logs_df) > 0:
+            pretrained_model_logs_df = payload_data_df.loc[(payload_data_df["is_control_plane_log"] == True) | (payload_data_df["is_rancher_log"] == True)]
+            if len(pretrained_model_logs_df) > 0:
                 await nw.publish(
-                    "preprocessed_logs_control_plane",
-                    control_plane_logs_df.to_json().encode(),
+                    "preprocessed_logs_pretrained_model",
+                    pretrained_model_logs_df.to_json().encode(),
                 )
             
-
 async def init_nats():
     logging.info("Attempting to connect to NATS")
     await nw.connect()
