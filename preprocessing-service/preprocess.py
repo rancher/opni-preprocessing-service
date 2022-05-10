@@ -75,6 +75,7 @@ async def mask_logs(queue):
     while True:
         json_payload = await queue.get()
         pending_list.append(json_payload)
+
         this_time = time.time()
         if this_time - last_time >= 1 or len(pending_list) >= 1000: # every seconds or every 1000 docs
             payload_data_df = pd.json_normalize(pending_list)
@@ -86,41 +87,41 @@ async def mask_logs(queue):
             payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
             
             
-            if "agent" in payload_data_df.columns:
-                payload_data_df.loc[
-                    payload_data_df["agent"] != "support",
-                    ["is_control_plane_log", "kubernetes_component"],
-                ] = [False, ""]
-            else:
-                payload_data_df["is_control_plane_log"] = False
-                payload_data_df["kubernetes_component"] = ""
-            # rke1
-            if "filename" in payload_data_df.columns:
-                rke_filename_filter = payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler")
-                payload_data_df.loc[rke_filename_filter, ["is_control_plane_log"]] = True
-                payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["filename"].apply(lambda x: os.path.basename(x))
-                payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["kubernetes_component"].str.split("_").str[0]
+            # if "agent" in payload_data_df.columns:
+            #     payload_data_df.loc[
+            #         payload_data_df["agent"] != "support",
+            #         ["is_control_plane_log", "kubernetes_component"],
+            #     ] = [False, ""]
+            # else:
+            #     payload_data_df["is_control_plane_log"] = False
+            #     payload_data_df["kubernetes_component"] = ""
+            # # rke1
+            # if "filename" in payload_data_df.columns:
+            #     rke_filename_filter = payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler")
+            #     payload_data_df.loc[rke_filename_filter, ["is_control_plane_log"]] = True
+            #     payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["filename"].apply(lambda x: os.path.basename(x))
+            #     payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["kubernetes_component"].str.split("_").str[0]
 
-                # k3s openrc
-                payload_data_df.loc[
-                    payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains(r"k3s\.log"),
-                    ["is_control_plane_log", "kubernetes_component"],
-                ] = [True, "k3s"]
-                # rke2 kubelet
-                payload_data_df.loc[
-                    payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
-                    ["is_control_plane_log", "kubernetes_component"],
-                ] = [True, "kubelet"]
-            # k3s/rke2 systemd
-            if "COMM" in payload_data_df.columns:
-                comm_df_filter = payload_data_df["COMM"].notnull() & payload_data_df["COMM"].str.contains("(k3s|rke2)-(agent|server)|kubelet")
-                payload_data_df.loc[comm_df_filter, ["is_control_plane_log"]] = True
-                payload_data_df.loc[comm_df_filter, ["kubernetes_component"]] = payload_data_df[comm_df_filter]["COMM"].str.split("-").str[0]
-            # rke2/kops/kubeadm static pods
-            if "kubernetes.labels.tier" in payload_data_df.columns:
-                kube_labels_tier_filter = payload_data_df["kubernetes.labels.tier"].notnull() & payload_data_df["kubernetes.labels.tier"] == "control-plane"
-                payload_data_df.loc[kube_labels_tier_filter, ["is_control_plane_log"]] = True
-                payload_data_df.loc[kube_labels_tier_filter, ["kubernetes_component"]] = payload_data_df[kube_labels_tier_filter]["kubernetes.labels.component"]
+            #     # k3s openrc
+            #     payload_data_df.loc[
+            #         payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains(r"k3s\.log"),
+            #         ["is_control_plane_log", "kubernetes_component"],
+            #     ] = [True, "k3s"]
+            #     # rke2 kubelet
+            #     payload_data_df.loc[
+            #         payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
+            #         ["is_control_plane_log", "kubernetes_component"],
+            #     ] = [True, "kubelet"]
+            # # k3s/rke2 systemd
+            # if "COMM" in payload_data_df.columns:
+            #     comm_df_filter = payload_data_df["COMM"].notnull() & payload_data_df["COMM"].str.contains("(k3s|rke2)-(agent|server)|kubelet")
+            #     payload_data_df.loc[comm_df_filter, ["is_control_plane_log"]] = True
+            #     payload_data_df.loc[comm_df_filter, ["kubernetes_component"]] = payload_data_df[comm_df_filter]["COMM"].str.split("-").str[0]
+            # # rke2/kops/kubeadm static pods
+            # if "kubernetes.labels.tier" in payload_data_df.columns:
+            #     kube_labels_tier_filter = payload_data_df["kubernetes.labels.tier"].notnull() & payload_data_df["kubernetes.labels.tier"] == "control-plane"
+            #     payload_data_df.loc[kube_labels_tier_filter, ["is_control_plane_log"]] = True
+            #     payload_data_df.loc[kube_labels_tier_filter, ["kubernetes_component"]] = payload_data_df[kube_labels_tier_filter]["kubernetes.labels.component"]
 
             masked_logs = []
 

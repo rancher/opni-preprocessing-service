@@ -54,6 +54,7 @@ class RegexMasker:
         content = content.lower()
 
         return content
+        
 
 
 masking_list = [
