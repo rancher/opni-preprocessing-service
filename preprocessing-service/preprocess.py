@@ -1,13 +1,11 @@
 # Standard Library
 import asyncio
+import json
 import logging
 import os
-import json
 import time
 
-
 # Third Party
-import numpy as np
 import pandas as pd
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import ConnectionTimeout
@@ -36,10 +34,11 @@ es = AsyncElasticsearch(
 
 nw = NatsWrapper()
 
+
 async def doc_generator(df):
     df["_op_type"] = "update"
     df["_index"] = "logs"
-    doc_keywords = set(["_op_type", "_index", "_id", "doc"])
+    doc_keywords = {"_op_type", "_index", "_id", "doc"}
     for index, document in df.iterrows():
         doc_dict = document[pd.notnull(document)].to_dict()
         doc_dict["doc"] = {}
@@ -48,8 +47,6 @@ async def doc_generator(df):
             if not k in doc_keywords:
                 doc_dict["doc"][k] = doc_dict[k]
                 del doc_dict[k]
-        # doc_dict["doc"]["drain_pretrained_template_matched"] = ""
-        # doc_dict["doc"]["anomaly_level"] = "Normal"
         yield doc_dict
 
 
@@ -69,84 +66,47 @@ async def consume_logs(mask_logs_queue):
 
 async def mask_logs(queue):
     masker = LogMasker()
-    pending_list = []
     last_time = time.time()
     while True:
         json_payload = await queue.get()
-        pending_list.append(json_payload)
 
-        this_time = time.time()
-        if this_time - last_time >= 1 or len(pending_list) >= 1000: # every seconds or every 1000 docs
-            payload_data_df = pd.json_normalize(pending_list)
-            logging.info(f"processing {len(pending_list)} logs...")
-            pending_list = []
-            last_time = this_time
-            payload_data_df["log"] = payload_data_df["log"].str.strip()
-            # drop redundant field in control plane logs
-            payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
+        payload_data_df = pd.json_normalize(json_payload)
+        if "log" not in payload_data_df.columns:
+            payload_data_df = pd.DataFrame(json_payload)
+        # logging.info(payload_data_df)
+        logging.info(f"processing {len(payload_data_df)} logs...")
+        payload_data_df["log"] = payload_data_df["log"].str.strip()
+        # drop redundant field in control plane logs
+        payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
 
-            
-            # if "agent" in payload_data_df.columns:
-            #     payload_data_df.loc[
-            #         payload_data_df["agent"] != "support",
-            #         ["is_control_plane_log", "kubernetes_component"],
-            #     ] = [False, ""]
-            # else:
-            #     payload_data_df["is_control_plane_log"] = False
-            #     payload_data_df["kubernetes_component"] = ""
-            # # rke1
-            # if "filename" in payload_data_df.columns:
-            #     rke_filename_filter = payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke/log/etcd|rke/log/kubelet|/rke/log/kube-apiserver|rke/log/kube-controller-manager|rke/log/kube-proxy|rke/log/kube-scheduler")
-            #     payload_data_df.loc[rke_filename_filter, ["is_control_plane_log"]] = True
-            #     payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["filename"].apply(lambda x: os.path.basename(x))
-            #     payload_data_df.loc[rke_filename_filter, ["kubernetes_component"]] = payload_data_df[rke_filename_filter]["kubernetes_component"].str.split("_").str[0]
+        masked_logs = []
 
-            #     # k3s openrc
-            #     payload_data_df.loc[
-            #         payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains(r"k3s\.log"),
-            #         ["is_control_plane_log", "kubernetes_component"],
-            #     ] = [True, "k3s"]
-            #     # rke2 kubelet
-            #     payload_data_df.loc[
-            #         payload_data_df["filename"].notnull() & payload_data_df["filename"].str.contains("rke2/agent/logs/kubelet"),
-            #         ["is_control_plane_log", "kubernetes_component"],
-            #     ] = [True, "kubelet"]
-            # # k3s/rke2 systemd
-            # if "COMM" in payload_data_df.columns:
-            #     comm_df_filter = payload_data_df["COMM"].notnull() & payload_data_df["COMM"].str.contains("(k3s|rke2)-(agent|server)|kubelet")
-            #     payload_data_df.loc[comm_df_filter, ["is_control_plane_log"]] = True
-            #     payload_data_df.loc[comm_df_filter, ["kubernetes_component"]] = payload_data_df[comm_df_filter]["COMM"].str.split("-").str[0]
-            # # rke2/kops/kubeadm static pods
-            # if "kubernetes.labels.tier" in payload_data_df.columns:
-            #     kube_labels_tier_filter = payload_data_df["kubernetes.labels.tier"].notnull() & payload_data_df["kubernetes.labels.tier"] == "control-plane"
-            #     payload_data_df.loc[kube_labels_tier_filter, ["is_control_plane_log"]] = True
-            #     payload_data_df.loc[kube_labels_tier_filter, ["kubernetes_component"]] = payload_data_df[kube_labels_tier_filter]["kubernetes.labels.component"]
-
-            masked_logs = []
-
-            for index, row in payload_data_df.iterrows():
-                try:
-                    masked_logs.append(masker.mask(row["log"]))
-                except Exception as e:
-                    masked_logs.append(row["log"])
-            payload_data_df["masked_log"] = masked_logs
-            payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
-            payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
+        for index, row in payload_data_df.iterrows():
             try:
-                async for ok, result in async_streaming_bulk(
-                    es, doc_generator(payload_data_df)
-                ):
-                    action, result = result.popitem()
-            except (BulkIndexError, ConnectionTimeout) as exception:
-                logging.error(exception)
+                masked_logs.append(masker.mask(row["log"]))
+            except Exception as e:
+                masked_logs.append(row["log"])
+        payload_data_df["masked_log"] = masked_logs
+        payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
+        payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
+        try:
+            async for ok, result in async_streaming_bulk(
+                es, doc_generator(payload_data_df)
+            ):
+                action, result = result.popitem()
+        except (BulkIndexError, ConnectionTimeout) as exception:
+            logging.error(exception)
 
-            pretrained_model_logs_df = payload_data_df.loc[(payload_data_df["log_type"] != "workload") ]
-            if len(pretrained_model_logs_df) > 0:
-                await nw.publish(
-                    "preprocessed_logs_pretrained_model",
-                    pretrained_model_logs_df.to_json().encode(),
-                )
-            
+        pretrained_model_logs_df = payload_data_df.loc[
+            (payload_data_df["log_type"] != "workload")
+        ]
+        if len(pretrained_model_logs_df) > 0:
+            await nw.publish(
+                "preprocessed_logs_pretrained_model",
+                pretrained_model_logs_df.to_json().encode(),
+            )
+
+
 async def init_nats():
     logging.info("Attempting to connect to NATS")
     await nw.connect()
