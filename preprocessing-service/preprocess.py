@@ -70,10 +70,10 @@ async def mask_logs(queue):
     while True:
         json_payload = await queue.get()
 
-        payload_data_df = pd.json_normalize(json_payload)
-        if "log" not in payload_data_df.columns:
+        if type(json_payload["log"]) == str:
+            payload_data_df = pd.DataFrame(json_payload, index=[0])
+        else:
             payload_data_df = pd.DataFrame(json_payload)
-        # logging.info(payload_data_df)
         logging.info(f"processing {len(payload_data_df)} logs...")
         payload_data_df["log"] = payload_data_df["log"].str.strip()
         # drop redundant field in control plane logs
