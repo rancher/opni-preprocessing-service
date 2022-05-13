@@ -78,6 +78,7 @@ async def mask_logs(queue):
         payload_data_df["log"] = payload_data_df["log"].str.strip()
         # drop redundant field in control plane logs
         payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
+        payload_data_df["ingest_at"] = payload_data_df["ingest_at"].astype(str)
 
         masked_logs = []
 
