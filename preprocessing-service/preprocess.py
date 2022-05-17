@@ -76,62 +76,11 @@ async def mask_logs(queue):
             await run(payload_data_df, masker)
 
         start_time = time.time()
-        if start_time - last_time >= 1 or len(pending_list) > 128:
+        if start_time - last_time >= 1 or len(pending_list) >= 128:
             payload_data_df = pd.DataFrame(pending_list)
             last_time = start_time
             pending_list = []
             await run(payload_data_df, masker)
-
-async def mask_logs_cpy(queue):
-    masker = LogMasker()
-    last_time = time.time()
-    opensearch_pending_list = []
-    opensearch_log_count = 0
-    while True:
-        json_payload = await queue.get()
-
-        if type(json_payload["log"]) == str:
-            payload_data_df = pd.DataFrame(json_payload, index=[0])
-            logging.info("ingest time here is {}".format(json_payload["ingest_at"]))
-        else:
-            payload_data_df = pd.DataFrame(json_payload)
-        logging.info(f"processing {len(payload_data_df)} logs...")
-        payload_data_df["log"] = payload_data_df["log"].str.strip()
-        # drop redundant field in control plane logs
-        payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-        payload_data_df["ingest_at"] = payload_data_df["ingest_at"].astype(str)
-
-        masked_logs = []
-
-        for index, row in payload_data_df.iterrows():
-            try:
-                masked_logs.append(masker.mask(row["log"]))
-            except Exception as e:
-                masked_logs.append(row["log"])
-        payload_data_df["masked_log"] = masked_logs
-        payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
-        payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
-        opensearch_pending_list.append(payload_data_df)
-        opensearch_log_count += len(payload_data_df)
-        start_time = time.time()
-        if (start_time - last_time >= 1 and opensearch_log_count > 0) or opensearch_log_count >= 128:
-            opensearch_df = pd.concat(opensearch_pending_list)
-            try:
-                async for ok, result in async_streaming_bulk(
-                    es, doc_generator(opensearch_df)
-                ):
-                    action, result = result.popitem()
-            except (BulkIndexError, ConnectionTimeout) as exception:
-                logging.error(exception)
-
-        pretrained_model_logs_df = payload_data_df.loc[
-            (payload_data_df["log_type"] != "workload")
-        ]
-        if len(pretrained_model_logs_df) > 0:
-            await nw.publish(
-                "preprocessed_logs_pretrained_model",
-                pretrained_model_logs_df.to_json().encode(),
-            )
 
 async def run(payload_data_df, masker):
     logging.info(f"processing {len(payload_data_df)} logs...")
