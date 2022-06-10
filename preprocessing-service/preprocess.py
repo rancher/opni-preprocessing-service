@@ -7,48 +7,12 @@ import time
 
 # Third Party
 import pandas as pd
-from elasticsearch import AsyncElasticsearch
-from elasticsearch.exceptions import ConnectionTimeout
-from elasticsearch.helpers import BulkIndexError, async_streaming_bulk
 from masker import LogMasker
 from opni_nats import NatsWrapper
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
 
-ES_ENDPOINT = os.environ["ES_ENDPOINT"]
-ES_USERNAME = os.environ["ES_USERNAME"]
-ES_PASSWORD = os.environ["ES_PASSWORD"]
-
-
-es = AsyncElasticsearch(
-    [ES_ENDPOINT],
-    port=9200,
-    http_auth=(ES_USERNAME, ES_PASSWORD),
-    http_compress=True,
-    verify_certs=False,
-    use_ssl=True,
-    timeout=10,
-    max_retries=5,
-    retry_on_timeout=True,
-)
-
 nw = NatsWrapper()
-
-
-async def doc_generator(df):
-    df["_op_type"] = "update"
-    df["_index"] = "logs"
-    doc_keywords = {"_op_type", "_index", "_id", "doc"}
-    for index, document in df.iterrows():
-        doc_dict = document[pd.notnull(document)].to_dict()
-        doc_dict["doc"] = {}
-        doc_dict_keys = list(doc_dict.keys())
-        for k in doc_dict_keys:
-            if not k in doc_keywords:
-                doc_dict["doc"][k] = doc_dict[k]
-                del doc_dict[k]
-        yield doc_dict
-
 
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
@@ -97,19 +61,15 @@ async def run(payload_data_df, masker):
             masked_logs.append(row["log"])
     payload_data_df["masked_log"] = masked_logs
     payload_data_df["ingest_at"] = payload_data_df["ingest_at"].astype(str)
+    payload_data_df["entry_processed"] = False
+    payload_data_df["inference_model"] = ""
     payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
     payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
-    try:
-        async for ok, result in async_streaming_bulk(
-            es, doc_generator(payload_data_df)
-        ):
-            action, result = result.popitem()
-    except (BulkIndexError, ConnectionTimeout) as exception:
-        logging.error(exception)
 
     pretrained_model_logs_df = payload_data_df.loc[
         (payload_data_df["log_type"] != "workload")
     ]
+
     if len(pretrained_model_logs_df) > 0:
         await nw.publish(
             "preprocessed_logs_pretrained_model",
