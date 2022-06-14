@@ -61,8 +61,6 @@ async def run(payload_data_df, masker):
             masked_logs.append(row["log"])
     payload_data_df["masked_log"] = masked_logs
     payload_data_df["ingest_at"] = payload_data_df["ingest_at"].astype(str)
-    payload_data_df["entry_processed"] = False
-    payload_data_df["inference_model"] = ""
     payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
     payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
 
