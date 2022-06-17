@@ -2,13 +2,14 @@
 import asyncio
 import json
 import logging
-import os
 import time
 
 # Third Party
+from google.protobuf import json_format
 import pandas as pd
 from masker import LogMasker
 from opni_nats import NatsWrapper
+import payload_pb2
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
 
@@ -16,9 +17,10 @@ nw = NatsWrapper()
 
 async def consume_logs(mask_logs_queue):
     async def subscribe_handler(msg):
+        payload_data = msg.data
+        log_payload = payload_pb2.Payload()
+        await mask_logs_queue.put(log_payload.FromString(payload_data))
 
-        payload_data = msg.data.decode()
-        await mask_logs_queue.put(json.loads(payload_data))
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -32,13 +34,8 @@ async def mask_logs(queue):
     last_time = time.time()
     pending_list = []
     while True:
-        json_payload = await queue.get()
-        if type(json_payload["log"]) == str:
-            pending_list.append(json_payload)
-        else:
-            payload_data_df = pd.DataFrame(json_payload)
-            await run(payload_data_df, masker)
-
+        payload = await queue.get()
+        pending_list.append(json_format.MessageToDict(payload))
         start_time = time.time()
         if start_time - last_time >= 1 or len(pending_list) >= 128:
             payload_data_df = pd.DataFrame(pending_list)
@@ -49,9 +46,6 @@ async def mask_logs(queue):
 async def run(payload_data_df, masker):
     logging.info(f"processing {len(payload_data_df)} logs...")
     payload_data_df["log"] = payload_data_df["log"].str.strip()
-    # drop redundant field in control plane logs
-    payload_data_df.drop(["t.$date"], axis=1, errors="ignore", inplace=True)
-
     masked_logs = []
 
     for index, row in payload_data_df.iterrows():
@@ -59,22 +53,18 @@ async def run(payload_data_df, masker):
             masked_logs.append(masker.mask(row["log"]))
         except Exception as e:
             masked_logs.append(row["log"])
-    payload_data_df["masked_log"] = masked_logs
-    payload_data_df["ingest_at"] = payload_data_df["ingest_at"].astype(str)
-    payload_data_df.drop(["_type"], axis=1, errors="ignore", inplace=True)
-    payload_data_df.drop(["_version"], axis=1, errors="ignore", inplace=True)
+    payload_data_df["maskedLog"] = masked_logs
 
-    pretrained_model_logs_df = payload_data_df.loc[
-        (payload_data_df["log_type"] != "workload")
-    ]
+    pretrained_model_logs_dict = (payload_data_df.loc[(payload_data_df["logType"] != "workload")]).to_dict('records')
 
-    if len(pretrained_model_logs_df) > 0:
+    if len(pretrained_model_logs_dict) > 0:
+        protobuf_dict = {"items": pretrained_model_logs_dict}
+        protobuf_payload = payload_pb2.PayloadList()
+        serialized_logs = (json_format.ParseDict(protobuf_dict, protobuf_payload)).SerializeToString()
         await nw.publish(
             "preprocessed_logs_pretrained_model",
-            pretrained_model_logs_df.to_json().encode(),
+            serialized_logs,
         )
-
-
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
