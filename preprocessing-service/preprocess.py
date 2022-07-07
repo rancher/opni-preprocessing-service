@@ -4,7 +4,7 @@ import logging
 import time
 
 # Third Party
-from loganomaly.loganomaly_pb import Payload, PayloadList
+from opni_proto.log_anomaly_payload_pb import Payload, PayloadList
 import pandas as pd
 from masker import LogMasker
 from opni_nats import NatsWrapper
