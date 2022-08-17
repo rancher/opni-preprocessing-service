@@ -53,14 +53,24 @@ async def run(payload_data_df, masker):
             masked_logs.append(row["log"])
     payload_data_df["masked_log"] = masked_logs
     pretrained_model_logs_df = payload_data_df.loc[(payload_data_df["log_type"] != "workload")]
+    workload_logs_df = payload_data_df.loc[(payload_data_df["log_type"] == "workload")]
+    logging.info(workload_logs_df["pod_name"])
 
 
     if len(pretrained_model_logs_df) > 0:
         pretrained_models_list = list(map(lambda row: Payload(*row), pretrained_model_logs_df.values))
-        protobuf_payload = PayloadList(items=pretrained_models_list)
+        protobuf_pretrained_payload = PayloadList(items=pretrained_models_list)
         await nw.publish(
             "preprocessed_logs_pretrained_model",
-            bytes(protobuf_payload),
+            bytes(protobuf_pretrained_payload),
+        )
+
+    if len(workload_logs_df) > 0:
+        workload_logs_list = list(map(lambda row: Payload(*row), pretrained_model_logs_df.values))
+        protobuf_workload_payload = PayloadList(items=workload_logs_list)
+        await nw.publish(
+            "preprocessed_logs_workload",
+            bytes(protobuf_workload_payload),
         )
 
 async def init_nats():
