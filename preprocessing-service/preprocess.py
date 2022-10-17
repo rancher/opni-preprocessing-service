@@ -38,7 +38,6 @@ async def consume_logs(mask_logs_queue):
     async def workload_parameters_handler(msg):
         global workload_parameters_dict
         workload_parameters_dict = json.loads(msg.data.decode())
-        logging.info(workload_parameters_dict)
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -63,28 +62,8 @@ async def get_latest_workload():
         logging.error(f"{e}")
 
 def verify_workload(payload):
-    logging.info(workload_parameters_dict)
-    logging.info(payload.cluster_id)
-    logging.info(payload.namespace_name)
-    if payload.pod_name == 'paymentservice-78c54474d-7qhff':
-        logging.info("here it is")
-    if payload.pod_name == "paymentservice-78c54474d-7qhff":
-        logging.info("double quotes lies the issue")
-    logging.info("pod name is {}".format(payload.pod_name))
-    for cluster_id in workload_parameters_dict:
-        logging.info(cluster_id)
-        if payload.cluster_id != cluster_id:
-            continue
-        for namespace_name in workload_parameters_dict[cluster_id]:
-            logging.info(namespace_name)
-            if payload.namespace_name != namespace_name:
-                continue
-            for pod_name in workload_parameters_dict[cluster_id][namespace_name]:
-                logging.info(pod_name)
-                if pod_name == payload.pod_name:
-                    logging.info("over here. match made")
-                    logging.info(payload.pod_name)
-                    return True
+    if payload.cluster_id in workload_parameters_dict and payload.namespace_name in workload_parameters_dict[payload.cluster_id] and payload.deployment in workload_parameters_dict[payload.cluster_id][payload.namespace_name]:
+        return True
     return False
 
 
@@ -104,19 +83,16 @@ async def mask_logs(queue):
 
 async def run(payload_list, masker):
     logging.info(f"processing {len(payload_list.items)} logs...")
+    start_time = time.time()
     filtered_workload_logs = []
     filtered_pretrained_logs = []
     for payload in payload_list.items:
         try:
             if payload.log_type == "workload":
-                logging.info("workload log here")
                 if verify_workload(payload):
-                    logging.info(payload.pod_name)
-                    logging.info(workload_parameters_dict)
                     payload.masked_log = masker.mask(payload.log)
                     filtered_workload_logs.append(payload)
             else:
-                logging.info(payload.log_type)
                 payload.masked_log = masker.mask(payload.log)
                 filtered_pretrained_logs.append(payload)
         except Exception as e:
@@ -124,7 +100,6 @@ async def run(payload_list, masker):
 
 
     if len(filtered_pretrained_logs) > 0:
-        logging.info("over here.")
         protobuf_pretrained_payload = PayloadList(items=filtered_pretrained_logs)
         await nw.publish(
             "preprocessed_logs_pretrained_model",bytes(protobuf_pretrained_payload),)
@@ -132,6 +107,8 @@ async def run(payload_list, masker):
     if len(filtered_workload_logs) > 0:
         protobuf_workload_payload = PayloadList(items=filtered_workload_logs)
         await nw.publish("preprocessed_logs_workload",bytes(protobuf_workload_payload),)
+    end_time = time.time()
+    logging.info("Time taken to process {} logs is {} seconds".format(len(payload_list.items), end_time - start_time))
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
