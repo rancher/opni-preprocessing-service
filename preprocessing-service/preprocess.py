@@ -118,7 +118,6 @@ async def init_nats():
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     mask_logs_queue = asyncio.Queue(loop=loop)
-    workload_parameters_queue = asyncio.Queue(loop=loop)
     nats_consumer_coroutine = consume_logs(mask_logs_queue)
     mask_logs_coroutine = mask_logs(mask_logs_queue)
 
