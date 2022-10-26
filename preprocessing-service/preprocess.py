@@ -3,13 +3,11 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import time
 
 # Third Party
 from elasticsearch import AsyncElasticsearch
 from opni_proto.log_anomaly_payload_pb import Payload, PayloadList
-import pandas as pd
 from masker import LogMasker
 from opni_nats import NatsWrapper
 
