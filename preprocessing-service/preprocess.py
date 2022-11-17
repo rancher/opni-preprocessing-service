@@ -35,7 +35,7 @@ async def consume_logs(mask_logs_queue):
 
     async def workload_parameters_handler(msg):
         global workload_parameters_dict
-        workload_parameters_dict = json.loads(msg.data.decode())
+        workload_parameters_dict = json.loads(msg.data.decode())["workloads"]
 
     await nw.subscribe(
         nats_subject="raw_logs",
@@ -45,7 +45,7 @@ async def consume_logs(mask_logs_queue):
     )
 
     await nw.subscribe(
-        nats_subject="workload_parameters",
+        nats_subject="model_workload_parameters",
         nats_queue="workers",
         subscribe_handler=workload_parameters_handler,
     )
