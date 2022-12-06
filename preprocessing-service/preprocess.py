@@ -1,31 +1,69 @@
 # Standard Library
 import asyncio
+import json
 import logging
+import os
 import time
 
 # Third Party
+from elasticsearch import AsyncElasticsearch
 from opni_proto.log_anomaly_payload_pb import Payload, PayloadList
-import pandas as pd
 from masker import LogMasker
 from opni_nats import NatsWrapper
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s")
-
+workload_parameters_dict = dict()
 nw = NatsWrapper()
 
+ES_ENDPOINT = os.environ["ES_ENDPOINT"]
+ES_USERNAME = os.getenv("ES_USERNAME", "admin")
+ES_PASSWORD = os.getenv("ES_PASSWORD", "admin")
+
+es_instance = AsyncElasticsearch(
+    [ES_ENDPOINT],
+    port=9200,
+    http_auth=(ES_USERNAME, ES_PASSWORD),
+    verify_certs=False,
+    use_ssl=True,
+)
+
 async def consume_logs(mask_logs_queue):
-    async def subscribe_handler(msg):
+    async def pretrained_subscribe_handler(msg):
         payload_data = msg.data
         log_payload = Payload()
         await mask_logs_queue.put(log_payload.parse(payload_data))
 
+    async def workload_parameters_handler(msg):
+        global workload_parameters_dict
+        workload_parameters_dict = json.loads(msg.data.decode())["workloads"]
 
     await nw.subscribe(
         nats_subject="raw_logs",
         nats_queue="workers",
         payload_queue=mask_logs_queue,
-        subscribe_handler=subscribe_handler,
+        subscribe_handler=pretrained_subscribe_handler,
     )
+
+    await nw.subscribe(
+        nats_subject="model_workload_parameters",
+        nats_queue="workers",
+        subscribe_handler=workload_parameters_handler,
+    )
+
+async def get_latest_workload():
+    global workload_parameters_dict
+    query_body = {"sort": [{"time": {"order": "desc"}}],"query": {"match_all": {}}}
+    try:
+        latest_workload = await es_instance.search(index="model-training-parameters",body=query_body,size=1)
+        workload_parameters_dict = json.loads(latest_workload["hits"]["hits"][0]["_source"]["parameters"])
+    except Exception as e:
+        logging.error(f"{e}")
+
+def verify_workload(payload):
+    if payload.cluster_id in workload_parameters_dict and payload.namespace_name in workload_parameters_dict[payload.cluster_id] and payload.deployment in workload_parameters_dict[payload.cluster_id][payload.namespace_name]:
+        return True
+    return False
+
 
 async def mask_logs(queue):
     masker = LogMasker()
@@ -36,32 +74,39 @@ async def mask_logs(queue):
         pending_list.append(payload)
         start_time = time.time()
         if start_time - last_time >= 1 or len(pending_list) >= 128:
-            payload_data_df = pd.DataFrame(pending_list)
+            payload_list = PayloadList(items=pending_list)
             last_time = start_time
             pending_list = []
-            await run(payload_data_df, masker)
+            await run(payload_list, masker)
 
-async def run(payload_data_df, masker):
-    logging.info(f"processing {len(payload_data_df)} logs...")
-    payload_data_df["log"] = payload_data_df["log"].str.strip()
-    masked_logs = []
-
-    for index, row in payload_data_df.iterrows():
+async def run(payload_list, masker):
+    logging.info(f"processing {len(payload_list.items)} logs...")
+    start_time = time.time()
+    filtered_workload_logs = []
+    filtered_pretrained_logs = []
+    for payload in payload_list.items:
         try:
-            masked_logs.append(masker.mask(row["log"]))
+            if payload.log_type == "workload":
+                if verify_workload(payload):
+                    payload.masked_log = masker.mask(payload.log)
+                    filtered_workload_logs.append(payload)
+            else:
+                payload.masked_log = masker.mask(payload.log)
+                filtered_pretrained_logs.append(payload)
         except Exception as e:
-            masked_logs.append(row["log"])
-    payload_data_df["masked_log"] = masked_logs
-    pretrained_model_logs_df = payload_data_df.loc[(payload_data_df["log_type"] != "workload")]
+            continue
 
 
-    if len(pretrained_model_logs_df) > 0:
-        pretrained_models_list = list(map(lambda row: Payload(*row), pretrained_model_logs_df.values))
-        protobuf_payload = PayloadList(items=pretrained_models_list)
+    if len(filtered_pretrained_logs) > 0:
+        protobuf_pretrained_payload = PayloadList(items=filtered_pretrained_logs)
         await nw.publish(
-            "preprocessed_logs_pretrained_model",
-            bytes(protobuf_payload),
-        )
+            "preprocessed_logs_pretrained_model",bytes(protobuf_pretrained_payload),)
+
+    if len(filtered_workload_logs) > 0:
+        protobuf_workload_payload = PayloadList(items=filtered_workload_logs)
+        await nw.publish("preprocessed_logs_workload",bytes(protobuf_workload_payload),)
+    end_time = time.time()
+    logging.info("Time taken to process {} logs is {} seconds".format(len(payload_list.items), end_time - start_time))
 
 async def init_nats():
     logging.info("Attempting to connect to NATS")
@@ -74,8 +119,10 @@ if __name__ == "__main__":
     nats_consumer_coroutine = consume_logs(mask_logs_queue)
     mask_logs_coroutine = mask_logs(mask_logs_queue)
 
-    task = loop.create_task(init_nats())
-    loop.run_until_complete(task)
+    init_nats_task = loop.create_task(init_nats())
+    loop.run_until_complete(init_nats_task)
+    latest_workload_task = loop.create_task(get_latest_workload())
+    loop.run_until_complete(latest_workload_task)
 
     loop.run_until_complete(
         asyncio.gather(nats_consumer_coroutine, mask_logs_coroutine)

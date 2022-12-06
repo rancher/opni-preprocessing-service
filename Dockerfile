@@ -5,4 +5,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 RUN chmod a+rwx -R /app
 WORKDIR /app
 
-CMD [ "python", "./preprocess.py" ]
+CMD [ "python", "./preprocess.py"]
