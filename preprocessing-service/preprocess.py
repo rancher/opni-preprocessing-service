@@ -7,6 +7,7 @@ import time
 
 # Third Party
 from elasticsearch import AsyncElasticsearch
+from nats.aio.errors import ErrTimeout
 from opni_proto.log_anomaly_payload_pb import Payload, PayloadList
 from masker import LogMasker
 from opni_nats import NatsWrapper
@@ -64,6 +65,13 @@ def verify_workload(payload):
         return True
     return False
 
+async def get_model_status():
+    try:
+        model_status = await nw.request("model_status",b"status",timeout=1)
+        return model_status.data.decode()
+    except ErrTimeout:
+        return "unavailable"
+
 
 async def mask_logs(queue):
     masker = LogMasker()
@@ -103,8 +111,12 @@ async def run(payload_list, masker):
             "preprocessed_logs_pretrained_model",bytes(protobuf_pretrained_payload),)
 
     if len(filtered_workload_logs) > 0:
-        protobuf_workload_payload = PayloadList(items=filtered_workload_logs)
-        await nw.publish("preprocessed_logs_workload",bytes(protobuf_workload_payload),)
+        model_status = await get_model_status()
+        if model_status == "completed":
+            protobuf_workload_payload = PayloadList(items=filtered_workload_logs)
+            await nw.publish("preprocessed_logs_workload",bytes(protobuf_workload_payload),)
+        else:
+            logging.info("Workload Deep Learning model is not ready at this time to infer on workload logs.")
     end_time = time.time()
     logging.info("Time taken to process {} logs is {} seconds".format(len(payload_list.items), end_time - start_time))
 
