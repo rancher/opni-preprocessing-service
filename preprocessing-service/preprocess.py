@@ -52,12 +52,12 @@ async def consume_logs(mask_logs_queue):
 
 async def get_latest_workload():
     global workload_parameters_dict
-    query_body = {"sort": [{"time": {"order": "desc"}}],"query": {"match_all": {}}}
     try:
-        latest_workload = await es_instance.search(index="model-training-parameters",body=query_body,size=1)
-        workload_parameters_dict = json.loads(latest_workload["hits"]["hits"][0]["_source"]["parameters"])
+        res = await nw.get_bucket("model-training-parameters")
+        bucket_payload = await res.get("modelTrainingParameters")
+        workload_parameters_dict = json.loads(bucket_payload.decode())
     except Exception as e:
-        logging.error(f"{e}")
+        logging.error(e)
 
 def verify_workload(payload):
     if payload.cluster_id in workload_parameters_dict and payload.namespace_name in workload_parameters_dict[payload.cluster_id] and payload.deployment in workload_parameters_dict[payload.cluster_id][payload.namespace_name]:
