@@ -55,7 +55,7 @@ async def get_latest_workload():
     try:
         res = await nw.get_bucket("model-training-parameters")
         bucket_payload = await res.get("modelTrainingParameters")
-        workload_parameters_dict = json.loads(bucket_payload.decode())
+        workload_parameters_dict = json.loads(bucket_payload.decode())["workloads"]
     except Exception as e:
         logging.error(e)
 
